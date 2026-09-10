@@ -1,0 +1,111 @@
+# Глибоке проникнення в REDengine 4: роадмап і три термінові фікси
+
+Власника аналіз (2026-09-10), збережено дослівно як référence-документ.
+
+## Загальна оцінка
+
+Напрям правильний. Технічний ланцюжок:
+
+```text
+my-lisp (семантика)
+   ↓
+wsm-my-lisp (reader/eval + Word ABI + Boxed handles)
+   ↓
+my-lisp-cyberpunk.dll (adapter)
+   ↓
+RED4ext / RED4ext.SDK (CRTTISystem, ExecuteGlobalFunction, ExecuteFunction,
+                        CClass/properties, GameStates, hooks)
+   ↓
+REDengine 4 (PlayerPuppet / systems / inventory / world / entities / events)
+```
+
+Фактична глибина зараз ~3/10 з 10 рівнів:
+
+| Рівень | Що означає | Стан |
+|---|---|---|
+| 0 | DLL потрапляє в процес гри | ✅ |
+| 1 | Lisp runtime живе всередині Cyberpunk | ✅ |
+| 2 | Lisp → C++ host → Lisp | ✅ |
+| 3 | Звернення до REDengine RTTI | 🟡 код є (гравець-присутній?) |
+| 4 | Отримати реальний `PlayerPuppet` | 🟡 майже |
+| 5 | Читати position/health/state | ❌ |
+| 6 | Ходити object graph | ❌ |
+| 7 | Реагувати на events/hooks | ❌ |
+| 8 | Керовано змінювати game state | ❌ |
+| 9 | Generic RTTI/reflection bridge з Lisp | ❌ |
+| 10 | Низькорівневі native hooks/detours | ❌ |
+
+## Три термінові проблеми (важливіші за нові capability)
+
+### 1. RTTI-виклик у неправильному lifecycle-місці
+
+`PlayerPresentPrimitive` викликається через `evalString()` прямо під час
+`EMainReason::Load`. Офіційна документація RED4ext прямо попереджає: у
+`Main(...Load...)` game memory ще не готова для RTTI/call functions —
+потрібні custom game states, коли scripting system уже доступна
+(docs.red4ext.com/mod-developers/creating-a-plugin).
+
+**Дія**: перенести game-facing Lisp-виклики з `Load` у правильний game
+state listener, перш ніж читати щось складніше за truthy-check.
+
+### 2. Ownership моделі GameHandle не вирішена
+
+`BoxedValue::GameHandle(*mut c_void)` зберігає лише сирий pointer;
+validity lifetime — відповідальність adapter-а, документація це чесно
+визнає. Але справжній `RED4ext::Handle<IScriptable>` має власну
+reference-counted семантику життя — збереження внутрішнього сирого pointer
+після знищення локального `Handle` потенційно залишає dangling reference.
+
+**Пропозиція**: adapter володіє справжнім `RED4ext::Handle<>` (в C++
+сторону, живе в своїй таблиці), Lisp отримує лише непрозорий token/index у
+цю таблицю — не адресу engine-об'єкта напряму.
+
+### 3. `Query()` бреше про свій runtime scope
+
+`Query()` досі заявляє `RUNTIME_VERSION_INDEPENDENT` з коментарем "adapter
+не торкається RTTI" — це вже неправда після `гравець-присутній?`. RED4ext
+рекомендує `RUNTIME_LATEST` для плагіна, прив'язаного до game API.
+
+**Дія**: виправити до розширення object access.
+
+## Наступна вісь (не `дай-зброю`/`телепортуй`/callbacks)
+
+```text
+GetPlayer → opaque Player handle → GetClassName → PlayerPuppet
+  → read WorldPosition → read simple state → walk one child object
+  → call one read-only method
+```
+
+Лише після цього: events/hooks → persistent subscriptions → mutating
+capabilities.
+
+Довгостроковий напрям — не сотні hardcoded C++ primitives
+(`здоров'я-гравця`, `позиція-гравця`, `машина-гравця`), а **керований RTTI
+bridge**:
+
+```lisp
+(визначити v (гравець))
+(клас v)                          ; => PlayerPuppet
+(читати-властивість v "...")      ; => ...
+(викликати v "GetQuickSlotsManager") ; => <game-handle>
+(клас ...)                        ; => QuickSlotsManager
+```
+
+REDengine RTTI → symbolic object graph → my-lisp → query/inference/agents.
+Це відрізняється від "звичайного мод-набору команд" — Lisp досліджує живий
+об'єктний світ гри як дані, а не викликає фіксований список команд.
+
+## Роль інших репо в цій фазі
+
+- `my-lisp` — семантика opaque handle і capability boundary (вже готова)
+- `wsm-target-contract` — ратифікував `GameHandle` як session-local `Boxed`
+- `wsm-my-lisp` — транспорт handle через FFI (wrap/unwrap, готово)
+- `cml` — AOT/codegen шлях, **не веде глибше в гру** — оптимізація
+  майбутнього розгортання, не двері в REDengine
+
+## Критерій "справжнього проникнення"
+
+Правильний lifecycle → отримати Player → прочитати реальну
+властивість/позицію → повернути її в my-lisp, живим запуском у грі. Якщо
+це проходить: "ми не інтегруємо Lisp з Cyberpunk — ми починаємо будувати
+Lisp-інтерфейс до внутрішньої моделі REDengine 4."
