@@ -1,8 +1,10 @@
 ; tasks.my — my-lisp-cyberpunk
 ; Product-surface repo for my-lisp inside Cyberpunk 2077 (CET/RED4ext analogy).
 ; Created 2026-09-10 empty; recommendations set 2026-09-10 from cross-repo review.
-; my-lisp remains sole language authority. Runtime embed work currently lives in
-; wsm-my-lisp (dll/ + plugin/). This repo must not silently reimplement eval.
+; my-lisp remains sole language authority. Runtime embed work (win64 nucleus,
+; reader/eval/ffi) lives in wsm-my-lisp (dll/). Cyberpunk-specific RED4ext
+; integration (this repo's adapter/) does not live in wsm-my-lisp. This repo
+; must not silently reimplement eval.
 
 ((kind . tasks)
  (version . 1)
