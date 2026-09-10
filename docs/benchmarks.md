@@ -86,3 +86,24 @@ Cyberpunk реальний `Running` tick. Тоді збирати тривал�
 Перший крок — `adapter harness v0`. Він має бути виконуваним, але
 діагностичним: regression у коректності ламає witness, коливання часу лише
 зберігається як evidence для наступного рішення.
+
+## Перший baseline
+
+Записано 2026-09-10 на Windows 11 Pro for Workstations 10.0.26200,
+Intel Core i5-6400 @ 2.70 GHz (4 physical / 4 logical cores), Release x64.
+
+- `my-lisp-cyberpunk`: `acabd1566033d56a42e1d64b4324fc2774095c07`;
+- `wsm-my-lisp`: `d561c357cf1138eeafb3b91df2caffd7e0f208a2`;
+- warm-up 1 000; 30 серій по 10 000 dispatch-викликів.
+
+| Сценарій | Median ns/dispatch | p95 ns/dispatch | Worst ns/dispatch |
+|---|---:|---:|---:|
+| `dispatch-empty` | 560.595 | 683.080 | 700.920 |
+| `dispatch-fact-false` | 2136.110 | 2293.480 | 2322.240 |
+| `dispatch-fact-true-noop` | 1900.920 | 2104.120 | 2232.130 |
+| `dispatch-fact-true-log` | 2237.300 | 2850.140 | 2902.210 |
+
+Це не замір Cyberpunk frame і не включає RED4ext або запис логу на диск.
+Він показує, що в поточному ABI reader + `cond` + host capability є основною
+частиною dispatch-шляху; висновок про frame budget можливий лише після
+окремого live-game виміру.

@@ -53,9 +53,10 @@
      (acceptance . "Два `.my` сценарії над незмінним adapter виражають різну поведінку для однакового факту; C++ не інтерпретує t/() і не тримає сценарний latch.")))
    ("CP-DISPATCH-BENCHMARKS-V0" .
     ((priority . 8.0)
-     (done . nil)
+     (done . t)
      (origin . owner-required)
      (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
+     (evidence . ("adapter/tests/DispatchBenchmark.cpp" "docs/benchmarks.md"))
      (capabilities . (benchmark fixed-dispatch evidence))
      (description . "Створити Release x64 adapter harness, який вимірює fixed `.my` dispatch окремо від WSM microbench і реального RED4ext frame.")
      (acceptance . "30 серій по 10 000 викликів після warm-up; BENCH_RESULT з median/p95; correctness witness і timing не змішані; live-game вимір іде окремо."))))))
