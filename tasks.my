@@ -1,0 +1,41 @@
+; tasks.my — my-lisp-cyberpunk
+; Product-surface repo for my-lisp inside Cyberpunk 2077 (CET/RED4ext analogy).
+; Created 2026-09-10 empty; recommendations set 2026-09-10 from cross-repo review.
+; my-lisp remains sole language authority. Runtime embed work currently lives in
+; wsm-my-lisp (dll/ + plugin/). This repo must not silently reimplement eval.
+
+((kind . tasks)
+ (version . 1)
+ (goal . "One honest in-game my-lisp surface for Cyberpunk 2077 without inventing a second language.")
+ (tasks .
+  (("CP-OWNER-SCOPE-V0" .
+    ((priority . 10.0)
+     (done . nil)
+     (origin . owner-required)
+     (capabilities . (governance product scope))
+     (description . "Owner answers: does the first mod-script need only fixed host-dispatch (def+cond+eq+car/cdr + host primitives), or also first-class closures/callbacks like CET Lua?")
+     (acceptance . "Written decision in README; agents stop proposing dual architectures.")))
+   ("CP-REPO-ROLE" .
+    ((priority . 9.5)
+     (done . nil)
+     (origin . owner-required)
+     (depends-on . ("CP-OWNER-SCOPE-V0"))
+     (description . "Decide whether this repo hosts RED4ext/UI product code or stays a thin pointer to wsm-my-lisp/plugin.")
+     (acceptance . "README states role; no duplicate DLL trees without reason.")))
+   ("CP-ONE-SHOT-SCRIPT" .
+    ((priority . 9.0)
+     (done . nil)
+     (depends-on . ("CP-OWNER-SCOPE-V0"))
+     (capabilities . (lisp cyberpunk fixtures))
+     (description . "Check in one .my demo script (uk identifiers: телепортуй / дай-зброю / збережи-гру) matching my-lisp cyberpunk fixtures.")
+     (acceptance . "Script runs under my-lisp CLI oracle; same observation expected in-host when embed exists.")))
+   ("CP-NO-SILENT-CLOSURES" .
+    ((priority . 8.5)
+     (done . nil)
+     (description . "Policy: do not special-case fake closures for engine callbacks in v0; say not-in-v0 explicitly.")
+     (acceptance . "No callback registry in v0 code without a new owner task.")))
+   ("CP-LINK-WSM-PLUGIN" .
+    ((priority . 8.0)
+     (done . nil)
+     (description . "Document dependency on wsm-my-lisp plugin/DLL builds; version pin when first in-game load works.")
+     (acceptance . "README points at exact wsm-my-lisp path and build instructions."))))))
