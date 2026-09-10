@@ -10,6 +10,7 @@
 // stays host-neutral in juv4uk/wsm-my-lisp.
 
 #include <RED4ext/RED4ext.hpp>
+#include <RED4ext/Scripting/Natives/ScriptGameInstance.hpp>
 
 #include <windows.h>
 
@@ -23,6 +24,12 @@ namespace
 // Matches dll/src/ffi.rs's `Session` opaque pointer type exactly: this
 // plugin never dereferences it, only passes it back to wsm_session_free.
 using Session = void;
+
+// wsm-os-target::Tag::Nil / ::True as bare Words. The plugin intentionally
+// keeps these ABI-level literals local until wsm-target-contract publishes
+// a C header for them (same rationale as LogPrimitive's original comment).
+constexpr uint64_t kWordNil = 1;
+constexpr uint64_t kWordTrue = 2;
 
 using WsmSessionInitFn = Session* (*)();
 using WsmSessionFreeFn = void (*)(Session*);
@@ -55,9 +62,50 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     }
 
     g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive запиши-лог invoked");
-    // WORD_NIL, the canonical Lisp result (). The plugin intentionally keeps
-    // this ABI-level literal local until wsm-target-contract publishes it.
-    *out = 1;
+    *out = kWordNil;
+    return 0;
+}
+
+// Second host primitive, still read-only/reversible: reads whether the game
+// currently has a resolvable player instance and returns t/nil. It does not
+// read or expose any player state (position, health, inventory) and it does
+// not keep the RED4ext::Handle it obtains -- wsm_wrap_game_handle exists for
+// a future capability that needs to hold a handle across calls; this one
+// deliberately discards it after the presence check, per the owner's choice
+// of scope for this first RTTI-touching capability.
+//
+// GetPlayer;GameInstance can genuinely fail this early (EMainReason::Load
+// fires before a player instance necessarily exists) -- that is not an
+// error, it is the honest current-game-state answer, so it maps to nil
+// rather than a host-primitive error code.
+int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
+{
+    if (out == nullptr)
+    {
+        return 1;
+    }
+    if (argc != 0)
+    {
+        return 2;
+    }
+    if (g_logger == nullptr)
+    {
+        return 3;
+    }
+
+    RED4ext::ScriptGameInstance gameInstance;
+    RED4ext::Handle<RED4ext::IScriptable> handle;
+    // Pattern taken directly from RED4ext.SDK's own
+    // examples/accessing_properties/Main.cpp (IsPlayerCrouched): resolve the
+    // player instance at call time via ExecuteGlobalFunction, not at plugin
+    // Load, and treat ExecuteGlobalFunction returning false the same as an
+    // empty handle -- both mean "no player right now."
+    bool executed = RED4ext::ExecuteGlobalFunction("GetPlayer;GameInstance", &handle, gameInstance);
+    bool present = executed && static_cast<bool>(handle);
+
+    g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive гравець-присутній? invoked, present=%s",
+                     present ? "true" : "false");
+    *out = present ? kWordTrue : kWordNil;
     return 0;
 }
 
@@ -209,6 +257,12 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             return false; // guard frees session + wsmModule
         }
 
+        if (registerPrimitive(session, "гравець-присутній?", &PlayerPresentPrimitive) != 0)
+        {
+            logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not register гравець-присутній?");
+            return false; // guard frees session + wsmModule
+        }
+
         char* result = evalString(session, "(запиши-лог)");
         if (result == nullptr)
         {
@@ -234,6 +288,30 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
 
         logger->InfoF(aHandle, "my-lisp-cyberpunk: (запиши-лог) => %s", result);
         freeString(result);
+
+        // Second capability: t/nil are both honest answers here (whether a
+        // player instance currently resolves), so unlike the (запиши-лог)
+        // gate above, neither value fails Load -- only a runtime/eval error
+        // (null or a non-t/non-() string) would.
+        char* playerResult = evalString(session, "(гравець-присутній?)");
+        if (playerResult == nullptr)
+        {
+            logger->ErrorF(aHandle, "my-lisp-cyberpunk: wsm_eval_string(гравець-присутній?) returned null");
+            return false; // guard frees session + wsmModule
+        }
+        const bool isPlayerAnswerValid =
+            std::strcmp(playerResult, "t") == 0 || std::strcmp(playerResult, "()") == 0;
+        if (!isPlayerAnswerValid)
+        {
+            logger->ErrorF(aHandle,
+                            "my-lisp-cyberpunk: (гравець-присутній?) => %s, expected t or () -- unexpected "
+                            "eval result, failing load",
+                            playerResult);
+            freeString(playerResult);
+            return false; // guard frees session + wsmModule
+        }
+        logger->InfoF(aHandle, "my-lisp-cyberpunk: (гравець-присутній?) => %s", playerResult);
+        freeString(playerResult);
 
         logger->InfoF(aHandle,
                        "my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=%p", session);
