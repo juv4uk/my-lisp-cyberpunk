@@ -173,27 +173,42 @@ private:
     bool m_released = false;
 };
 
-// Runs (гравець-присутній?) once game RTTI/scripting is actually available.
+// Set once (гравець-присутній?) has actually observed "t" -- after that,
+// PollPlayerPresent becomes a no-op check instead of re-evaluating every
+// frame forever. There is currently no capability that needs to notice the
+// player *leaving* again, so this is deliberately a one-way latch, not a
+// live subscription.
+bool g_playerPresenceLogged = false;
+
+// GameStates.hpp documents that for EGameStateType::Running specifically,
+// OnUpdate's return value doesn't gate re-invocation the way it does for
+// other states -- RED4ext keeps calling it every frame regardless while the
+// game stays in Running. That is exactly the "poll until it becomes true"
+// behavior needed here: EMainReason::Load and even the first Running
+// OnEnter can both fire before a player instance exists (main menu,
+// character creation, loading screens), so a single one-shot check can
+// permanently miss the moment a player actually appears.
 //
 // RED4ext's own plugin-development docs warn that EMainReason::Load fires
-// before game memory (RTTI, scripting system) is ready -- any plugin that
-// calls into RTTI or game functions from Load is reading too early. This
-// primitive is registered at Load (cheap, no RTTI touch), but only
-// EVALUATED here, from a RED4ext::v1::GameState::OnEnter callback for
-// EGameStateType::Running, which is RED4ext's own designated "it's safe
-// now" signal.
+// before game memory (RTTI, scripting system) is ready at all -- any
+// plugin that calls into RTTI from Load is reading too early. That is why
+// this still only starts once Running has begun, not from Load.
 //
-// OnEnter's contract is a plain, non-capturing function pointer, so this
-// reaches the session/eval exports via the file-scope globals stashed by
-// Load, not by capture.
-bool RunPlayerPresentCheck(RED4ext::CGameApplication*)
+// Non-capturing function pointer (OnUpdate's required shape): reaches the
+// session/eval exports via the file-scope globals stashed by Load.
+bool PollPlayerPresent(RED4ext::CGameApplication*)
 {
+    if (g_playerPresenceLogged)
+    {
+        return true; // already observed once; nothing left to poll for
+    }
     if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr ||
         g_logger == nullptr)
     {
         // Load must have failed or not completed the WSM handshake; nothing
         // to run. Not logged as an error here -- Load already reported
-        // whatever went wrong on its own path.
+        // whatever went wrong on its own path. Returning true stops this
+        // being polled every frame for a session that is never coming up.
         return true;
     }
 
@@ -201,27 +216,32 @@ bool RunPlayerPresentCheck(RED4ext::CGameApplication*)
     if (playerResult == nullptr)
     {
         g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: wsm_eval_string(гравець-присутній?) returned null");
-        return true; // done either way -- this check runs once, not retried
+        return true;
     }
 
-    const bool isPlayerAnswerValid =
-        std::strcmp(playerResult, "t") == 0 || std::strcmp(playerResult, "()") == 0;
-    if (!isPlayerAnswerValid)
+    if (std::strcmp(playerResult, "t") == 0)
+    {
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: (гравець-присутній?) => t (player detected)");
+        g_playerPresenceLogged = true;
+    }
+    else if (std::strcmp(playerResult, "()") != 0)
     {
         // Unlike the Load-time запиши-лог gate, this cannot fail plugin
-        // load closed -- Load already returned true. An unexpected result
-        // here is logged as an error but does not unload the plugin.
+        // load closed -- Load already returned true long ago. An
+        // unexpected result here is logged as an error but does not unload
+        // the plugin, and it stops polling rather than spamming the log
+        // every frame with the same malformed answer.
         g_logger->ErrorF(g_pluginHandle,
                           "my-lisp-cyberpunk: (гравець-присутній?) => %s, expected t or () -- unexpected "
-                          "eval result",
+                          "eval result, stopping poll",
                           playerResult);
+        g_playerPresenceLogged = true; // stop polling; this is a bug to fix, not a state to keep sampling
     }
-    else
-    {
-        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: (гравець-присутній?) => %s", playerResult);
-    }
+    // else: () (no player yet) -- deliberately not logged, to avoid one log
+    // line per frame while waiting; keep polling next frame.
+
     g_wsmFreeString(playerResult);
-    return true; // this check runs exactly once per session, not on every update
+    return true; // return value is ignored by RED4ext for the Running state
 }
 
 std::wstring GetOwnDirectory()
@@ -358,11 +378,13 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
 
         // (гравець-присутній?) touches RTTI (RED4ext::ExecuteGlobalFunction
         // against GetPlayer;GameInstance) and must not run from Load -- see
-        // RunPlayerPresentCheck's comment. Register it to run once RED4ext
-        // itself says the game is in EGameStateType::Running.
+        // PollPlayerPresent's comment. OnUpdate (not OnEnter) so it keeps
+        // polling every frame in Running until it actually observes the
+        // player, since Running can begin before a player instance exists
+        // (main menu, character creation, loading screens).
         static RED4ext::v1::GameState playerPresentState{
-            .OnEnter = &RunPlayerPresentCheck,
-            .OnUpdate = nullptr,
+            .OnEnter = nullptr,
+            .OnUpdate = &PollPlayerPresent,
             .OnExit = nullptr,
         };
         aSdk->gameStates->Add(aHandle, RED4ext::EGameStateType::Running, &playerPresentState);
