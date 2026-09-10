@@ -33,7 +33,9 @@
      (acceptance . "scripts/перший-зріз.my runs under my-lisp CLI oracle and returns (); the adapter expects the same result in-host.")))
    ("CP-NO-SILENT-CLOSURES" .
     ((priority . 8.5)
-     (done . nil)
+     (done . t)
+     (origin . owner-required)
+     (evidence . ("README.md" "adapter/README.md" "adapter/src/Main.cpp"))
      (description . "Policy: do not special-case fake closures for engine callbacks in v0; say not-in-v0 explicitly.")
      (acceptance . "No callback registry in v0 code without a new owner task.")))
    ("CP-LINK-WSM-PLUGIN" .
