@@ -40,4 +40,12 @@
     ((priority . 8.0)
      (done . nil)
      (description . "Document dependency on wsm-my-lisp plugin/DLL builds; version pin when first in-game load works.")
-     (acceptance . "README points at exact wsm-my-lisp path and build instructions."))))))
+     (acceptance . "README points at exact wsm-my-lisp path and build instructions.")))
+   ("CP-LISP-OWNS-ORCHESTRATION-V0" .
+    ((priority . 10.0)
+     (done . t)
+     (origin . owner-required)
+     (depends-on . ("CP-OWNER-SCOPE-V0"))
+     (capabilities . (fixed-dispatch host-mechanism lisp-policy))
+     (description . "Перенести Running tick policy з C++ у scripts/диспетчер.my: C++ доставляє tick та виконує зареєстровані capabilities, а `.my` запитує факти, обирає дію й послідовність.")
+     (acceptance . "Два `.my` сценарії над незмінним adapter виражають різну поведінку для однакового факту; C++ не інтерпретує t/() і не тримає сценарний latch."))))))

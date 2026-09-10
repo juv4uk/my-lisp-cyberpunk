@@ -11,7 +11,7 @@
 |---|---|---|
 | RTTI під час `Load` | Виправлено | `PlayerPresentPrimitive` запускається лише з `OnUpdate` у `EGameStateType::Running`; коміт `ab716c1` |
 | Неправдивий `RUNTIME_VERSION_INDEPENDENT` | Виправлено | `Query()` оголошує `RED4EXT_V1_RUNTIME_VERSION_LATEST`; коміт `60ee238` |
-| Ownership `GameHandle` | Відкрито | Потрібна C++ таблиця, що володіє живими `RED4ext::Handle<>`; Lisp бачить тільки token/index |
+| Ownership `GameHandle` | Виправлено | `GameHandleTable` утримує живі `RED4ext::Handle<>`; Lisp бачить тільки token/index; коміт `2f44b09` |
 
 Перший read-only зріз `(запиши-лог)` перевірено живим запуском у грі;
 `(гравець-присутній?)` зібрано, але ще не має окремого live transcript.

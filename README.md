@@ -10,7 +10,8 @@ Lisp-сесію та виконує один read-only вертикальний 
 
 - Власник визначив v0 як **fixed host-dispatch**, без closures та callback-реєстрації.
 - Цей репозиторій є власником Cyberpunk-specific RED4ext/UI коду; він не дублює Lisp runtime.
-- Перший вертикальний зріз викликає українську примітиву `(запиши-лог)` і пише результат у RED4ext log. Зміни збереження, інвентарю, телепортація та callbacks не входять у v0.
+- Першою host capability є українська `(запиши-лог)`. Її виклик обирає `.my` сценарій, а RED4ext adapter лише записує результат у log. Зміни збереження, інвентарю, телепортація та callbacks не входять у v0.
+- Для `Running` є одна fixed-dispatch точка: adapter доставляє tick у [`scripts/диспетчер.my`](scripts/%D0%B4%D0%B8%D1%81%D0%BF%D0%B5%D1%82%D1%87%D0%B5%D1%80.my). Сценарій сам запитує факти й викликає capabilities; C++ не розбирає його `t`/`()` і не тримає сценарний стан.
 - Семантика мови — лише **[my-lisp](https://github.com/juv4uk/my-lisp)**.
 - In-process eval / DLL лишаються у **[wsm-my-lisp](https://github.com/juv4uk/wsm-my-lisp)** (`dll/`).
 - Компіляція офлайн — **[cml](https://github.com/juv4uk/cml)**; **не** runtime `eval_string` у cml.

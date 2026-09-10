@@ -19,6 +19,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -56,6 +59,9 @@ WsmBindFn g_wsmBind = nullptr;
 WsmWrapGameHandleFn g_wsmWrapGameHandle = nullptr;
 GameHandleTable g_gameHandles;
 GameHandleTable::Token g_playerToken = 0;
+// Єдина fixed-dispatch програма для подій Running. Її завантажуємо один раз
+// під час Load; C++ не читає її результат як команду й не містить її policy.
+std::string g_dispatchSource;
 
 // The first host primitive is deliberately reversible: it writes only to
 // RED4ext's log. It proves Lisp -> host -> Lisp without touching a save,
@@ -80,13 +86,9 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     return 0;
 }
 
-// Second host primitive, still read-only/reversible: reads whether the game
-// currently has a resolvable player instance and returns t/nil. It does not
-// read or expose any player state (position, health, inventory) and it does
-// not keep the RED4ext::Handle it obtains -- wsm_wrap_game_handle exists for
-// a future capability that needs to hold a handle across calls; this one
-// deliberately discards it after the presence check, per the owner's choice
-// of scope for this first RTTI-touching capability.
+// Read-only capability: читає факт наявності player instance і повертає t/().
+// За першої появи механічно утримує RED4ext Handle у таблиці хоста та зв'язує
+// непрозорий token як `гравець`; жодного game state не читає й не змінює.
 //
 // GetPlayer;GameInstance can genuinely fail this early (EMainReason::Load
 // fires before a player instance necessarily exists) -- that is not an
@@ -212,93 +214,31 @@ private:
     bool m_released = false;
 };
 
-// Set once (гравець-присутній?) has actually observed "t" -- after that,
-// PollPlayerPresent becomes a no-op check instead of re-evaluating every
-// frame forever. There is currently no capability that needs to notice the
-// player *leaving* again, so this is deliberately a one-way latch, not a
-// live subscription.
-bool g_playerPresenceLogged = false;
-
-// GameStates.hpp documents that for EGameStateType::Running specifically,
-// OnUpdate's return value doesn't gate re-invocation the way it does for
-// other states -- RED4ext keeps calling it every frame regardless while the
-// game stays in Running. That is exactly the "poll until it becomes true"
-// behavior needed here: EMainReason::Load and even the first Running
-// OnEnter can both fire before a player instance exists (main menu,
-// character creation, loading screens), so a single one-shot check can
-// permanently miss the moment a player actually appears.
-//
-// RED4ext's own plugin-development docs warn that EMainReason::Load fires
-// before game memory (RTTI, scripting system) is ready at all -- any
-// plugin that calls into RTTI from Load is reading too early. That is why
-// this still only starts once Running has begun, not from Load.
-//
-// Non-capturing function pointer (OnUpdate's required shape): reaches the
-// session/eval exports via the file-scope globals stashed by Load.
-bool PollPlayerPresent(RED4ext::CGameApplication*)
+// RED4ext викликає OnUpdate для Running на кожному frame. Це лише доставка
+// події у фіксовану точку входу: сценарій у scripts/диспетчер.my вирішує,
+// які факти читати, які capabilities викликати й що робити з їх результатами.
+// Поточний ABI не має persistable Lisp definitions, тому dispatch v0 є одним
+// top-level `.my` виразом, завантаженим під час Load, без callback registry.
+bool DispatchRunningTick(RED4ext::CGameApplication*)
 {
-    if (g_playerPresenceLogged)
-    {
-        return true; // already observed once; nothing left to poll for
-    }
     if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr ||
-        g_logger == nullptr)
+        g_logger == nullptr || g_dispatchSource.empty())
     {
-        // Load must have failed or not completed the WSM handshake; nothing
-        // to run. Not logged as an error here -- Load already reported
-        // whatever went wrong on its own path. Returning true stops this
-        // being polled every frame for a session that is never coming up.
         return true;
     }
 
-    char* playerResult = g_wsmEvalString(g_wsmSession, "(гравець-присутній?)");
-    if (playerResult == nullptr)
+    char* result = g_wsmEvalString(g_wsmSession, g_dispatchSource.c_str());
+    if (result == nullptr)
     {
-        g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: wsm_eval_string(гравець-присутній?) returned null");
+        g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: fixed Lisp dispatch returned null");
         return true;
     }
 
-    if (std::strcmp(playerResult, "t") == 0)
-    {
-        char* handleResult = g_wsmEvalString(g_wsmSession, "гравець");
-        if (handleResult == nullptr)
-        {
-            g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: wsm_eval_string(гравець) returned null");
-            return true;
-        }
-        if (std::strcmp(handleResult, "#<game-handle>") == 0)
-        {
-            g_logger->InfoF(g_pluginHandle,
-                             "my-lisp-cyberpunk: (гравець-присутній?) => t; гравець => #<game-handle>");
-            g_playerPresenceLogged = true;
-        }
-        else
-        {
-            g_logger->ErrorF(g_pluginHandle,
-                              "my-lisp-cyberpunk: гравець => %s, expected #<game-handle>; stopping poll",
-                              handleResult);
-            g_playerPresenceLogged = true;
-        }
-        g_wsmFreeString(handleResult);
-    }
-    else if (std::strcmp(playerResult, "()") != 0)
-    {
-        // Unlike the Load-time запиши-лог gate, this cannot fail plugin
-        // load closed -- Load already returned true long ago. An
-        // unexpected result here is logged as an error but does not unload
-        // the plugin, and it stops polling rather than spamming the log
-        // every frame with the same malformed answer.
-        g_logger->ErrorF(g_pluginHandle,
-                          "my-lisp-cyberpunk: (гравець-присутній?) => %s, expected t or () -- unexpected "
-                          "eval result, stopping poll",
-                          playerResult);
-        g_playerPresenceLogged = true; // stop polling; this is a bug to fix, not a state to keep sampling
-    }
-    // else: () (no player yet) -- deliberately not logged, to avoid one log
-    // line per frame while waiting; keep polling next frame.
-
-    g_wsmFreeString(playerResult);
-    return true; // return value is ignored by RED4ext for the Running state
+    // Це observability, не protocol: C++ не порівнює результат із t/() і не
+    // робить з нього наступний крок. Наступний крок уже виконав `.my`.
+    g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp dispatch => %s", result);
+    g_wsmFreeString(result);
+    return true;
 }
 
 std::wstring GetOwnDirectory()
@@ -323,6 +263,20 @@ std::wstring GetOwnDirectory()
     std::wstring full(path, length);
     auto slash = full.find_last_of(L"\\/");
     return slash == std::wstring::npos ? L"" : full.substr(0, slash + 1);
+}
+
+bool LoadDispatchSource(std::string& out)
+{
+    const std::filesystem::path dispatchPath =
+        std::filesystem::path(GetOwnDirectory()) / L"scripts" / L"диспетчер.my";
+    std::ifstream source(dispatchPath, std::ios::binary);
+    if (!source)
+    {
+        return false;
+    }
+
+    out.assign(std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>());
+    return !out.empty();
 }
 } // namespace
 
@@ -399,7 +353,9 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             return false; // guard frees session + wsmModule
         }
 
-        char* result = evalString(session, "(запиши-лог)");
+        // Це перевірка лише evaluator/ABI, без виклику capability: C++ не
+        // вибирає жодної поведінки мода під час завантаження.
+        char* result = evalString(session, "(quote ())");
         if (result == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: wsm_eval_string returned null");
@@ -415,15 +371,22 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         if (!matchesOracle)
         {
             logger->ErrorF(aHandle,
-                            "my-lisp-cyberpunk: (запиши-лог) => %s, expected () -- vertical slice oracle "
+                            "my-lisp-cyberpunk: (quote ()) => %s, expected () -- vertical slice oracle "
                             "mismatch, failing load",
                             result);
             freeString(result);
             return false; // guard frees session + wsmModule
         }
 
-        logger->InfoF(aHandle, "my-lisp-cyberpunk: (запиши-лог) => %s", result);
+        logger->InfoF(aHandle, "my-lisp-cyberpunk: (quote ()) => %s", result);
         freeString(result);
+
+        std::string dispatchSource;
+        if (!LoadDispatchSource(dispatchSource))
+        {
+            logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not load scripts/диспетчер.my");
+            return false;
+        }
 
         logger->InfoF(aHandle,
                        "my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=%p", session);
@@ -436,17 +399,14 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_wsmFreeString = freeString;
         g_wsmBind = bind;
         g_wsmWrapGameHandle = wrapGameHandle;
+        g_dispatchSource = std::move(dispatchSource);
         guard.Release();
 
-        // (гравець-присутній?) touches RTTI (RED4ext::ExecuteGlobalFunction
-        // against GetPlayer;GameInstance) and must not run from Load -- see
-        // PollPlayerPresent's comment. OnUpdate (not OnEnter) so it keeps
-        // polling every frame in Running until it actually observes the
-        // player, since Running can begin before a player instance exists
-        // (main menu, character creation, loading screens).
+        // OnUpdate доставляє Running tick. RTTI торкається лише та
+        // capability, яку обере Lisp-диспетчер, а не сам C++ scheduler.
         static RED4ext::v1::GameState playerPresentState{
             .OnEnter = nullptr,
-            .OnUpdate = &PollPlayerPresent,
+            .OnUpdate = &DispatchRunningTick,
             .OnExit = nullptr,
         };
         aSdk->gameStates->Add(aHandle, RED4ext::EGameStateType::Running, &playerPresentState);
@@ -456,7 +416,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
     {
         g_gameHandles.Clear();
         g_playerToken = 0;
-        g_playerPresenceLogged = false;
+        g_dispatchSource.clear();
         if (g_wsmModule != nullptr)
         {
             if (g_wsmSession != nullptr)
