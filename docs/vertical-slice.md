@@ -26,6 +26,14 @@ my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=...
 Порядок перших двох рядків фіксований, останній вказує на успішне
 створення сесії. Значення адреси після `session=` не є частиною фікстури.
 
+## Вже перевірено поза грою
+
+- `scripts/перший-зріз.my` виконано через reference `my-lisp`; результат — `()`.
+- `cmake --build adapter/build --config Release` успішно зібрав
+  `my-lisp-cyberpunk-plugin.dll`.
+- `dumpbin /exports` підтвердив три необхідні RED4ext exports: `Main`,
+  `Query`, `Supports`.
+
 ## Відомі межі
 
 - `TAG_BOXED=7` досі очікує ратифікації в `wsm-target-contract`; цей зріз

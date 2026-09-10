@@ -10,25 +10,25 @@
  (tasks .
   (("CP-OWNER-SCOPE-V0" .
     ((priority . 10.0)
-     (done . nil)
+     (done . t)
      (origin . owner-required)
      (capabilities . (governance product scope))
      (description . "Owner answers: does the first mod-script need only fixed host-dispatch (def+cond+eq+car/cdr + host primitives), or also first-class closures/callbacks like CET Lua?")
-     (acceptance . "Written decision in README; agents stop proposing dual architectures.")))
+     (acceptance . "Written decision in README: v0 is fixed host-dispatch without closures/callbacks.")))
    ("CP-REPO-ROLE" .
     ((priority . 9.5)
-     (done . nil)
+     (done . t)
      (origin . owner-required)
      (depends-on . ("CP-OWNER-SCOPE-V0"))
      (description . "Decide whether this repo hosts RED4ext/UI product code or stays a thin pointer to wsm-my-lisp/plugin.")
-     (acceptance . "README states role; no duplicate DLL trees without reason.")))
-   ("CP-ONE-SHOT-SCRIPT" .
+     (acceptance . "README states role: this repo owns the adapter; wsm-my-lisp owns the runtime DLL.")))
+  ("CP-ONE-SHOT-SCRIPT" .
     ((priority . 9.0)
-     (done . nil)
+     (done . t)
      (depends-on . ("CP-OWNER-SCOPE-V0"))
      (capabilities . (lisp cyberpunk fixtures))
      (description . "Check in one .my demo script (uk identifiers: телепортуй / дай-зброю / збережи-гру) matching my-lisp cyberpunk fixtures.")
-     (acceptance . "Script runs under my-lisp CLI oracle; same observation expected in-host when embed exists.")))
+     (acceptance . "scripts/перший-зріз.my runs under my-lisp CLI oracle and returns (); the adapter expects the same result in-host.")))
    ("CP-NO-SILENT-CLOSURES" .
     ((priority . 8.5)
      (done . nil)
