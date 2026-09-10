@@ -1,0 +1,3 @@
+[submodule "adapter/deps/red4ext.sdk"]
+	path = adapter/deps/red4ext.sdk
+	url = https://github.com/WopsS/RED4ext.SDK.git

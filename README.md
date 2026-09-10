@@ -1,20 +1,19 @@
 # my-lisp-cyberpunk
 
-Статус: створено власником 2026-09-10; код продукту ще не тут.
+Статус: RED4ext host adapter живе в [`adapter/`](adapter/). Він завантажує
+host-neutral WSM runtime DLL, створює Lisp-сесію та виконує один
+read-only вертикальний зріз через RED4ext log.
 
 **Мета:** REPL / скрипти my-lisp у Cyberpunk 2077 (аналогія CET/Lua, шлях RED4ext).
 
 ## Дисципліна
 
-- Перші продуктові рішення — **власника**, не агента (`tasks.my`: `CP-OWNER-SCOPE-V0`).
+- Власник визначив v0 як **fixed host-dispatch**, без closures та callback-реєстрації.
+- Цей репозиторій є власником Cyberpunk-specific RED4ext/UI коду; він не дублює Lisp runtime.
+- Перший вертикальний зріз викликає українську примітиву `(запиши-лог)` і пише результат у RED4ext log. Зміни збереження, інвентарю, телепортація та callbacks не входять у v0.
 - Семантика мови — лише **[my-lisp](https://github.com/juv4uk/my-lisp)**.
-- In-process eval / DLL / plugin зараз у **[wsm-my-lisp](https://github.com/juv4uk/wsm-my-lisp)** (`dll/`, `plugin/`).
+- In-process eval / DLL лишаються у **[wsm-my-lisp](https://github.com/juv4uk/wsm-my-lisp)** (`dll/`).
 - Компіляція офлайн — **[cml](https://github.com/juv4uk/cml)**; **не** runtime `eval_string` у cml.
-
-## Відкриті питання власнику
-
-1. Перший мод-скрипт: лише fixed dispatch (cond+def), чи одразу closures/callbacks?
-2. Це репо — продукт (plugin+UI), чи тонка обгортка над wsm-my-lisp?
 
 ## Задачі
 
