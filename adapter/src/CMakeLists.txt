@@ -49,3 +49,12 @@ add_executable(
 if(MSVC)
   target_compile_options(my-lisp-cyberpunk-dispatch-witness PRIVATE /utf-8)
 endif()
+
+add_executable(
+  my-lisp-cyberpunk-dispatch-benchmark
+  ../tests/DispatchBenchmark.cpp
+)
+
+if(MSVC)
+  target_compile_options(my-lisp-cyberpunk-dispatch-benchmark PRIVATE /utf-8)
+endif()
