@@ -215,7 +215,7 @@ private:
 };
 
 // RED4ext викликає OnUpdate для Running на кожному frame. Це лише доставка
-// події у фіксовану точку входу: сценарій у scripts/диспетчер.my вирішує,
+// події у фіксовану точку входу: сценарій у scripts/диспетчер.мій вирішує,
 // які факти читати, які capabilities викликати й що робити з їх результатами.
 // Поточний ABI не має persistable Lisp definitions, тому dispatch v0 є одним
 // top-level `.my` виразом, завантаженим під час Load, без callback registry.
@@ -268,7 +268,7 @@ std::wstring GetOwnDirectory()
 bool LoadDispatchSource(std::string& out)
 {
     const std::filesystem::path dispatchPath =
-        std::filesystem::path(GetOwnDirectory()) / L"scripts" / L"диспетчер.my";
+        std::filesystem::path(GetOwnDirectory()) / L"scripts" / L"диспетчер.мій";
     std::ifstream source(dispatchPath, std::ios::binary);
     if (!source)
     {
@@ -384,7 +384,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         std::string dispatchSource;
         if (!LoadDispatchSource(dispatchSource))
         {
-            logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not load scripts/диспетчер.my");
+            logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not load scripts/диспетчер.мій");
             return false;
         }
 

@@ -21,7 +21,7 @@ capability, зібрана, ще не перевірена живим запус
 6. обчислює `(quote ())`, звіряє результат з oracle (`()`), fails closed
    при розбіжності;
 7. доставляє кожен `Running` tick в один fixed-dispatch `.my` вираз з
-   `scripts/диспетчер.my`; C++ не викликає `(гравець-присутній?)`, не
+   `scripts/диспетчер.мій`; C++ не викликає `(гравець-присутній?)`, не
    порівнює `t`/`()` і не вирішує, коли зупинити сценарій;
 8. якщо Lisp-сценарій викликає `(гравець-присутній?)` і отримує `t`, host
    копіює `RED4ext::Handle<IScriptable>` у власну
@@ -59,15 +59,15 @@ my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=...
 `adapter/tests/DispatchWitness.cpp` запускає той самий WSM ABI з однаковим
 host-фактом «гравець присутній» для двох `.my` сценаріїв:
 
-- `scripts/сценарій-лог.my` викликає `запиши-лог` рівно один раз;
-- `scripts/сценарій-тиша.my` не викликає його жодного разу.
+- `scripts/сценарій-лог.мій` викликає `запиши-лог` рівно один раз;
+- `scripts/сценарій-тиша.мій` не викликає його жодного разу.
 
 C++ witness не змінюється між запусками. Це локальний executable proof
 fixed-dispatch; він не замінює потрібний live transcript у грі.
 
 ## Вже перевірено поза грою
 
-- `scripts/перший-зріз.my` виконано через reference `my-lisp`; результат — `()`.
+- `scripts/перший-зріз.мій` виконано через reference `my-lisp`; результат — `()`.
 - `cmake --build adapter/build --config Release` успішно зібрав
   `my-lisp-cyberpunk-plugin.dll` з обома примітивами.
 - `dumpbin /exports` підтвердив три необхідні RED4ext exports: `Main`,

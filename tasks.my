@@ -30,7 +30,7 @@
      (depends-on . ("CP-OWNER-SCOPE-V0"))
      (capabilities . (lisp cyberpunk fixtures))
      (description . "Check in one .my demo script (uk identifiers: телепортуй / дай-зброю / збережи-гру) matching my-lisp cyberpunk fixtures.")
-     (acceptance . "scripts/перший-зріз.my runs under my-lisp CLI oracle and returns (); the adapter expects the same result in-host.")))
+     (acceptance . "scripts/перший-зріз.мій runs under my-lisp CLI oracle and returns (); the adapter expects the same result in-host.")))
    ("CP-NO-SILENT-CLOSURES" .
     ((priority . 8.5)
      (done . t)
@@ -49,7 +49,7 @@
      (origin . owner-required)
      (depends-on . ("CP-OWNER-SCOPE-V0"))
      (capabilities . (fixed-dispatch host-mechanism lisp-policy))
-     (description . "Перенести Running tick policy з C++ у scripts/диспетчер.my: C++ доставляє tick та виконує зареєстровані capabilities, а `.my` запитує факти, обирає дію й послідовність.")
+     (description . "Перенести Running tick policy з C++ у scripts/диспетчер.мій: C++ доставляє tick та виконує зареєстровані capabilities, а `.my` запитує факти, обирає дію й послідовність.")
      (acceptance . "Два `.my` сценарії над незмінним adapter виражають різну поведінку для однакового факту; C++ не інтерпретує t/() і не тримає сценарний latch.")))
    ("CP-DISPATCH-BENCHMARKS-V0" .
     ((priority . 8.0)

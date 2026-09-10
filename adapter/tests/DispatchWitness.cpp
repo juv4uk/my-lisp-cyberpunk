@@ -118,7 +118,7 @@ int main(int argc, char** argv)
 {
     if (argc != 4)
     {
-        std::cerr << "usage: dispatch-witness <wsm-dll> <log-scenario.my> <silent-scenario.my>\n";
+        std::cerr << "usage: dispatch-witness <wsm-dll> <log-scenario.мій> <silent-scenario.мій>\n";
         return 2;
     }
 
