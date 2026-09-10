@@ -42,6 +42,11 @@ HMODULE g_wsmModule = nullptr;
 Session* g_wsmSession = nullptr;
 RED4ext::v1::PluginHandle g_pluginHandle = nullptr;
 const RED4ext::v1::Logger* g_logger = nullptr;
+// Stashed at Load so the later Running-state callback (a non-capturing
+// function pointer, per RED4ext::v1::GameState's shape) can still reach
+// them without re-resolving via GetProcAddress.
+WsmEvalStringFn g_wsmEvalString = nullptr;
+WsmFreeStringFn g_wsmFreeString = nullptr;
 
 // The first host primitive is deliberately reversible: it writes only to
 // RED4ext's log. It proves Lisp -> host -> Lisp without touching a save,
@@ -168,6 +173,57 @@ private:
     bool m_released = false;
 };
 
+// Runs (гравець-присутній?) once game RTTI/scripting is actually available.
+//
+// RED4ext's own plugin-development docs warn that EMainReason::Load fires
+// before game memory (RTTI, scripting system) is ready -- any plugin that
+// calls into RTTI or game functions from Load is reading too early. This
+// primitive is registered at Load (cheap, no RTTI touch), but only
+// EVALUATED here, from a RED4ext::v1::GameState::OnEnter callback for
+// EGameStateType::Running, which is RED4ext's own designated "it's safe
+// now" signal.
+//
+// OnEnter's contract is a plain, non-capturing function pointer, so this
+// reaches the session/eval exports via the file-scope globals stashed by
+// Load, not by capture.
+bool RunPlayerPresentCheck(RED4ext::CGameApplication*)
+{
+    if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr ||
+        g_logger == nullptr)
+    {
+        // Load must have failed or not completed the WSM handshake; nothing
+        // to run. Not logged as an error here -- Load already reported
+        // whatever went wrong on its own path.
+        return true;
+    }
+
+    char* playerResult = g_wsmEvalString(g_wsmSession, "(гравець-присутній?)");
+    if (playerResult == nullptr)
+    {
+        g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: wsm_eval_string(гравець-присутній?) returned null");
+        return true; // done either way -- this check runs once, not retried
+    }
+
+    const bool isPlayerAnswerValid =
+        std::strcmp(playerResult, "t") == 0 || std::strcmp(playerResult, "()") == 0;
+    if (!isPlayerAnswerValid)
+    {
+        // Unlike the Load-time запиши-лог gate, this cannot fail plugin
+        // load closed -- Load already returned true. An unexpected result
+        // here is logged as an error but does not unload the plugin.
+        g_logger->ErrorF(g_pluginHandle,
+                          "my-lisp-cyberpunk: (гравець-присутній?) => %s, expected t or () -- unexpected "
+                          "eval result",
+                          playerResult);
+    }
+    else
+    {
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: (гравець-присутній?) => %s", playerResult);
+    }
+    g_wsmFreeString(playerResult);
+    return true; // this check runs exactly once per session, not on every update
+}
+
 std::wstring GetOwnDirectory()
 {
     wchar_t path[MAX_PATH] = {};
@@ -289,30 +345,6 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         logger->InfoF(aHandle, "my-lisp-cyberpunk: (запиши-лог) => %s", result);
         freeString(result);
 
-        // Second capability: t/nil are both honest answers here (whether a
-        // player instance currently resolves), so unlike the (запиши-лог)
-        // gate above, neither value fails Load -- only a runtime/eval error
-        // (null or a non-t/non-() string) would.
-        char* playerResult = evalString(session, "(гравець-присутній?)");
-        if (playerResult == nullptr)
-        {
-            logger->ErrorF(aHandle, "my-lisp-cyberpunk: wsm_eval_string(гравець-присутній?) returned null");
-            return false; // guard frees session + wsmModule
-        }
-        const bool isPlayerAnswerValid =
-            std::strcmp(playerResult, "t") == 0 || std::strcmp(playerResult, "()") == 0;
-        if (!isPlayerAnswerValid)
-        {
-            logger->ErrorF(aHandle,
-                            "my-lisp-cyberpunk: (гравець-присутній?) => %s, expected t or () -- unexpected "
-                            "eval result, failing load",
-                            playerResult);
-            freeString(playerResult);
-            return false; // guard frees session + wsmModule
-        }
-        logger->InfoF(aHandle, "my-lisp-cyberpunk: (гравець-присутній?) => %s", playerResult);
-        freeString(playerResult);
-
         logger->InfoF(aHandle,
                        "my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=%p", session);
 
@@ -320,7 +352,20 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         // plugin's lifetime; EMainReason::Unload releases them explicitly.
         g_wsmModule = wsmModule;
         g_wsmSession = session;
+        g_wsmEvalString = evalString;
+        g_wsmFreeString = freeString;
         guard.Release();
+
+        // (гравець-присутній?) touches RTTI (RED4ext::ExecuteGlobalFunction
+        // against GetPlayer;GameInstance) and must not run from Load -- see
+        // RunPlayerPresentCheck's comment. Register it to run once RED4ext
+        // itself says the game is in EGameStateType::Running.
+        static RED4ext::v1::GameState playerPresentState{
+            .OnEnter = &RunPlayerPresentCheck,
+            .OnUpdate = nullptr,
+            .OnExit = nullptr,
+        };
+        aSdk->gameStates->Add(aHandle, RED4ext::EGameStateType::Running, &playerPresentState);
         break;
     }
     case RED4ext::v1::EMainReason::Unload:
@@ -354,11 +399,13 @@ RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::v1::PluginInfo* aInfo)
     aInfo->name = L"my-lisp-cyberpunk";
     aInfo->author = L"juv4uk";
     aInfo->version = RED4EXT_V1_SEMVER(0, 1, 0);
-    // RUNTIME_VERSION_INDEPENDENT: this adapter does not touch game RTTI or
-    // state; it only writes a lifecycle proof to RED4ext's own logger, so
-    // pinning to a specific game version isn't needed yet, unlike a
-    // plugin that actually hooks game functions would require.
-    aInfo->runtime = RED4EXT_V1_RUNTIME_VERSION_INDEPENDENT;
+    // RUNTIME_VERSION_LATEST, not RUNTIME_VERSION_INDEPENDENT: since
+    // гравець-присутній? started calling RED4ext::ExecuteGlobalFunction
+    // against real game RTTI (GetPlayer;GameInstance, PlayerPuppet), this
+    // adapter is no longer merely a passive logger of the loading
+    // lifecycle -- INDEPENDENT would misrepresent that to RED4ext's own
+    // version-compatibility check.
+    aInfo->runtime = RED4EXT_V1_RUNTIME_VERSION_LATEST;
     aInfo->sdk = RED4EXT_V1_SDK_VERSION_CURRENT;
 }
 

@@ -68,6 +68,17 @@ my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=...
   handle відкидається одразу після перевірки truthy/falsy. Boxed
   game-handle зберігання — наступний, ще не зроблений крок для capability,
   якій потрібно утримувати handle між викликами.
+- **Ownership-контракт для майбутнього handle-зберігання** (wsm-my-lisp
+  commit `09f3951`, docs/deep-penetration-roadmap-2026-09-10.md): коли
+  з'явиться перша capability, що утримує `RED4ext::Handle<T>` між
+  викликами, адаптер **не має** передавати `wsm_wrap_game_handle` сирий
+  `T*`, здобутий з локального `Handle<T>` — цей `Handle<T>` виходить зі
+  скоупу й декрементує refcount, залишаючи збережений pointer dangling.
+  Замість цього: адаптер тримає власну таблицю refcount-живих `Handle<T>`
+  (індексовану C++ структуру), і передає в `wsm_wrap_game_handle` лише
+  opaque token/index у цю таблицю (напр. індекс, кастований у
+  `*mut c_void`) — не адресу самого engine-об'єкта. Ця таблиця ще не
+  написана — жодна поточна capability її не потребує.
 - Усі числа tagged-word ABI надходять з `wsm-target-contract` (v4,
   ратифіковано). `t`/`()` — `Tag::True`/`Tag::Nil`, обидва вже стабільні
   частини контракту з версії 1.
