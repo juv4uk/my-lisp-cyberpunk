@@ -6,6 +6,8 @@
 RED4ext v1.30.0, Cyberpunk 2077 v2.31) — transcript в закритому issue
 `my-lisp-cyberpunk#1`. `(гравець-присутній?)` — друга, теж read-only
 capability, зібрана, ще не перевірена живим запуском.
+Коли вона вперше бачить гравця, адаптер прив'язує Lisp-ім'я `гравець`
+до `#<game-handle>` без розкриття адреси REDengine.
 
 ## Що саме доводить зріз
 
@@ -24,7 +26,11 @@ capability, зібрана, ще не перевірена живим запус
    тож коллбек викликається щокадру, доки не встановить внутрішній
    one-way latch); `t`/`()` обидва валідні, жодне не fail closed — лише
    `null`/неочікуваний рядок зупиняє опитування з помилкою;
-8. записує обидва виклики й результати у RED4ext log.
+8. при першому `t` копіює `RED4ext::Handle<IScriptable>` у власну
+   C++-таблицю, передає Lisp тільки session-local token і прив'язує його
+   під іменем `гравець`;
+9. перевіряє, що `(гравець)` друкується як `#<game-handle>`, і записує
+   результати у RED4ext log.
 
 `запиши-лог` не отримує жодних RTTI-посилань і не має доступу до
 save/inventory/player state. `гравець-присутній?` торкається RTTI вперше
@@ -32,7 +38,7 @@ save/inventory/player state. `гравець-присутній?` торкаєт
 патерн, що `RED4ext.SDK`'s власний `examples/accessing_properties`'s
 `IsPlayerCrouched`) — але лише перевіряє факт наявності гравця (`bool`),
 нічого не читає з самого player-об'єкта (не позицію, не здоров'я, нічого)
-і не утримує отриманий `RED4ext::Handle` після виклику.
+і не розкриває отриманий `RED4ext::Handle` Lisp-коду як адресу.
 
 ## Очікувані рядки логу
 
@@ -41,6 +47,8 @@ my-lisp-cyberpunk: Lisp host primitive запиши-лог invoked
 my-lisp-cyberpunk: (запиши-лог) => ()
 my-lisp-cyberpunk: Lisp host primitive гравець-присутній? invoked, present=<true|false>
 my-lisp-cyberpunk: (гравець-присутній?) => <t|()>
+my-lisp-cyberpunk: retained player as opaque token=<nonzero>
+my-lisp-cyberpunk: (гравець-присутній?) => t; гравець => #<game-handle>
 my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=...
 ```
 
@@ -66,22 +74,12 @@ my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=...
 
 ## Відомі межі
 
-- `wsm_wrap_game_handle`/`wsm_unwrap_game_handle` (wsm-my-lisp commit
-  `48a63ed`) готові, але `гравець-присутній?` їх свідомо не використовує —
-  handle відкидається одразу після перевірки truthy/falsy. Boxed
-  game-handle зберігання — наступний, ще не зроблений крок для capability,
-  якій потрібно утримувати handle між викликами.
-- **Ownership-контракт для майбутнього handle-зберігання** (wsm-my-lisp
-  commit `09f3951`, docs/deep-penetration-roadmap-2026-09-10.md): коли
-  з'явиться перша capability, що утримує `RED4ext::Handle<T>` між
-  викликами, адаптер **не має** передавати `wsm_wrap_game_handle` сирий
-  `T*`, здобутий з локального `Handle<T>` — цей `Handle<T>` виходить зі
-  скоупу й декрементує refcount, залишаючи збережений pointer dangling.
-  Замість цього: адаптер тримає власну таблицю refcount-живих `Handle<T>`
-  (індексовану C++ структуру), і передає в `wsm_wrap_game_handle` лише
-  opaque token/index у цю таблицю (напр. індекс, кастований у
-  `*mut c_void`) — не адресу самого engine-об'єкта. Ця таблиця ще не
-  написана — жодна поточна capability її не потребує.
+- `GameHandleTable` у C++ adapter тримає копії refcounted
+  `RED4ext::Handle<IScriptable>` і передає `wsm_wrap_game_handle` лише
+  ненульовий token. Жоден raw engine pointer не переходить FFI-межу.
+  Таблиця очищується при `Unload`; handle не може жити довше за сесію гри.
+- Перший live transcript для `гравець`/`#<game-handle>` ще потрібен. До
+  нього це зібраний, але не підтверджений у грі read-only шлях.
 - Усі числа tagged-word ABI надходять з `wsm-target-contract` (v4,
   ратифіковано). `t`/`()` — `Tag::True`/`Tag::Nil`, обидва вже стабільні
   частини контракту з версії 1.

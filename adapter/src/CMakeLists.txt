@@ -3,6 +3,7 @@ add_library(my-lisp-cyberpunk-plugin SHARED)
 target_sources(
   my-lisp-cyberpunk-plugin
   PRIVATE
+    GameHandleTable.cpp
     Main.cpp
 )
 

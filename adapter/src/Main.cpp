@@ -14,10 +14,13 @@
 
 #include <windows.h>
 
+#include "GameHandleTable.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 
 namespace
 {
@@ -35,8 +38,10 @@ using WsmSessionInitFn = Session* (*)();
 using WsmSessionFreeFn = void (*)(Session*);
 using WsmHostPrimitiveFn = int32_t (*)(std::size_t argc, const uint64_t* argv, uint64_t* out);
 using WsmRegisterPrimitiveFn = int32_t (*)(Session*, const char*, WsmHostPrimitiveFn);
+using WsmBindFn = int32_t (*)(Session*, const char*, uint64_t);
 using WsmEvalStringFn = char* (*)(Session*, const char*);
 using WsmFreeStringFn = void (*)(char*);
+using WsmWrapGameHandleFn = int32_t (*)(Session*, void*, uint64_t*);
 
 HMODULE g_wsmModule = nullptr;
 Session* g_wsmSession = nullptr;
@@ -47,6 +52,10 @@ const RED4ext::v1::Logger* g_logger = nullptr;
 // them without re-resolving via GetProcAddress.
 WsmEvalStringFn g_wsmEvalString = nullptr;
 WsmFreeStringFn g_wsmFreeString = nullptr;
+WsmBindFn g_wsmBind = nullptr;
+WsmWrapGameHandleFn g_wsmWrapGameHandle = nullptr;
+GameHandleTable g_gameHandles;
+GameHandleTable::Token g_playerToken = 0;
 
 // The first host primitive is deliberately reversible: it writes only to
 // RED4ext's log. It proves Lisp -> host -> Lisp without touching a save,
@@ -107,6 +116,36 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     // empty handle -- both mean "no player right now."
     bool executed = RED4ext::ExecuteGlobalFunction("GetPlayer;GameInstance", &handle, gameInstance);
     bool present = executed && static_cast<bool>(handle);
+
+    if (present && g_playerToken == 0)
+    {
+        if (g_wsmSession == nullptr || g_wsmWrapGameHandle == nullptr || g_wsmBind == nullptr)
+        {
+            return 4;
+        }
+
+        const auto token = g_gameHandles.Retain(std::move(handle));
+        if (token == 0)
+        {
+            return 5;
+        }
+
+        uint64_t playerWord = 0;
+        if (g_wsmWrapGameHandle(g_wsmSession, GameHandleTable::ToOpaqueToken(token), &playerWord) != 0)
+        {
+            g_gameHandles.Release(token);
+            return 6;
+        }
+        if (g_wsmBind(g_wsmSession, "гравець", playerWord) != 0)
+        {
+            g_gameHandles.Release(token);
+            return 7;
+        }
+
+        g_playerToken = token;
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: retained player as opaque token=%zu",
+                         static_cast<std::size_t>(token));
+    }
 
     g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive гравець-присутній? invoked, present=%s",
                      present ? "true" : "false");
@@ -221,8 +260,26 @@ bool PollPlayerPresent(RED4ext::CGameApplication*)
 
     if (std::strcmp(playerResult, "t") == 0)
     {
-        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: (гравець-присутній?) => t (player detected)");
-        g_playerPresenceLogged = true;
+        char* handleResult = g_wsmEvalString(g_wsmSession, "гравець");
+        if (handleResult == nullptr)
+        {
+            g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: wsm_eval_string(гравець) returned null");
+            return true;
+        }
+        if (std::strcmp(handleResult, "#<game-handle>") == 0)
+        {
+            g_logger->InfoF(g_pluginHandle,
+                             "my-lisp-cyberpunk: (гравець-присутній?) => t; гравець => #<game-handle>");
+            g_playerPresenceLogged = true;
+        }
+        else
+        {
+            g_logger->ErrorF(g_pluginHandle,
+                              "my-lisp-cyberpunk: гравець => %s, expected #<game-handle>; stopping poll",
+                              handleResult);
+            g_playerPresenceLogged = true;
+        }
+        g_wsmFreeString(handleResult);
     }
     else if (std::strcmp(playerResult, "()") != 0)
     {
@@ -318,10 +375,13 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
 
         auto registerPrimitive =
             reinterpret_cast<WsmRegisterPrimitiveFn>(GetProcAddress(wsmModule, "wsm_register_primitive"));
+        auto bind = reinterpret_cast<WsmBindFn>(GetProcAddress(wsmModule, "wsm_bind"));
         auto evalString = reinterpret_cast<WsmEvalStringFn>(GetProcAddress(wsmModule, "wsm_eval_string"));
         auto freeString = reinterpret_cast<WsmFreeStringFn>(GetProcAddress(wsmModule, "wsm_free_string"));
-        if (registerPrimitive == nullptr || evalString == nullptr || freeString == nullptr ||
-            sessionFree == nullptr)
+        auto wrapGameHandle =
+            reinterpret_cast<WsmWrapGameHandleFn>(GetProcAddress(wsmModule, "wsm_wrap_game_handle"));
+        if (registerPrimitive == nullptr || bind == nullptr || evalString == nullptr || freeString == nullptr ||
+            wrapGameHandle == nullptr || sessionFree == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: required WSM host ABI export is missing");
             return false; // guard frees session + wsmModule
@@ -374,6 +434,8 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_wsmSession = session;
         g_wsmEvalString = evalString;
         g_wsmFreeString = freeString;
+        g_wsmBind = bind;
+        g_wsmWrapGameHandle = wrapGameHandle;
         guard.Release();
 
         // (гравець-присутній?) touches RTTI (RED4ext::ExecuteGlobalFunction
@@ -392,6 +454,9 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
     }
     case RED4ext::v1::EMainReason::Unload:
     {
+        g_gameHandles.Clear();
+        g_playerToken = 0;
+        g_playerPresenceLogged = false;
         if (g_wsmModule != nullptr)
         {
             if (g_wsmSession != nullptr)
@@ -407,6 +472,10 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             FreeLibrary(g_wsmModule);
             g_wsmModule = nullptr;
         }
+        g_wsmEvalString = nullptr;
+        g_wsmFreeString = nullptr;
+        g_wsmBind = nullptr;
+        g_wsmWrapGameHandle = nullptr;
         g_logger = nullptr;
         g_pluginHandle = nullptr;
         break;
