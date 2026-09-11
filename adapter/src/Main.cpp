@@ -1,13 +1,8 @@
 // my-lisp-cyberpunk RED4ext host adapter.
 //
-// Purpose of THIS pass: prove wsm_my_lisp_cyberpunk_dll.dll (dll/, the
-// win64-nucleus + reader/eval/ffi crate) actually loads inside the game
-// process and its wsm_session_init export is callable. It then proves one
-// read-only Lisp -> host -> Lisp path with the log-only запиши-лог primitive.
-// RTTI hooks and every state-changing game capability remain later steps.
-//
-// The adapter is intentionally Cyberpunk-specific. The loaded WSM runtime
-// stays host-neutral in juv4uk/wsm-my-lisp.
+// Purpose of THIS pass: prove wsm_my_lisp_cyberpunk_dll.dll loads inside the
+// game process and host primitives work. RTTI/mutating capabilities later.
+// Surface extensions (owner 2026-09-10): .my ↔ .мій for dispatch load.
 
 #include <RED4ext/RED4ext.hpp>
 #include <RED4ext/Scripting/Natives/ScriptGameInstance.hpp>
@@ -15,25 +10,19 @@
 #include <windows.h>
 
 #include "GameHandleTable.hpp"
+#include "SurfaceExt.hpp"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
-#include <iterator>
 #include <string>
 #include <utility>
 
 namespace
 {
-// Matches dll/src/ffi.rs's `Session` opaque pointer type exactly: this
-// plugin never dereferences it, only passes it back to wsm_session_free.
 using Session = void;
 
-// wsm-os-target::Tag::Nil / ::True as bare Words. The plugin intentionally
-// keeps these ABI-level literals local until wsm-target-contract publishes
-// a C header for them (same rationale as LogPrimitive's original comment).
 constexpr uint64_t kWordNil = 1;
 constexpr uint64_t kWordTrue = 2;
 
@@ -50,22 +39,14 @@ HMODULE g_wsmModule = nullptr;
 Session* g_wsmSession = nullptr;
 RED4ext::v1::PluginHandle g_pluginHandle = nullptr;
 const RED4ext::v1::Logger* g_logger = nullptr;
-// Stashed at Load so the later Running-state callback (a non-capturing
-// function pointer, per RED4ext::v1::GameState's shape) can still reach
-// them without re-resolving via GetProcAddress.
 WsmEvalStringFn g_wsmEvalString = nullptr;
 WsmFreeStringFn g_wsmFreeString = nullptr;
 WsmBindFn g_wsmBind = nullptr;
 WsmWrapGameHandleFn g_wsmWrapGameHandle = nullptr;
 GameHandleTable g_gameHandles;
 GameHandleTable::Token g_playerToken = 0;
-// Єдина fixed-dispatch програма для подій Running. Її завантажуємо один раз
-// під час Load; C++ не читає її результат як команду й не містить її policy.
 std::string g_dispatchSource;
 
-// The first host primitive is deliberately reversible: it writes only to
-// RED4ext's log. It proves Lisp -> host -> Lisp without touching a save,
-// inventory, player position, or raw game object.
 int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
     if (out == nullptr)
@@ -81,14 +62,6 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
         return 3;
     }
 
-    // DispatchRunningTick's fix (return false, keep polling every frame)
-    // means запиши-лог can now be invoked every frame while a .my script
-    // calls it unconditionally -- observed live: hundreds of identical
-    // "invoked" lines per second, 6.6MB log growth in minutes. This
-    // primitive always returns the same nil regardless of when/how often
-    // it's called, so repeat log lines carry no new information; log the
-    // first invocation only, as a liveness confirmation, not a running
-    // tally of calls.
     static bool loggedOnce = false;
     if (!loggedOnce)
     {
@@ -99,14 +72,6 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     return 0;
 }
 
-// Read-only capability: читає факт наявності player instance і повертає t/().
-// За першої появи механічно утримує RED4ext Handle у таблиці хоста та зв'язує
-// непрозорий token як `гравець`; жодного game state не читає й не змінює.
-//
-// GetPlayer;GameInstance can genuinely fail this early (EMainReason::Load
-// fires before a player instance necessarily exists) -- that is not an
-// error, it is the honest current-game-state answer, so it maps to nil
-// rather than a host-primitive error code.
 int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
     if (out == nullptr)
@@ -124,11 +89,6 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 
     RED4ext::ScriptGameInstance gameInstance;
     RED4ext::Handle<RED4ext::IScriptable> handle;
-    // Pattern taken directly from RED4ext.SDK's own
-    // examples/accessing_properties/Main.cpp (IsPlayerCrouched): resolve the
-    // player instance at call time via ExecuteGlobalFunction, not at plugin
-    // Load, and treat ExecuteGlobalFunction returning false the same as an
-    // empty handle -- both mean "no player right now."
     bool executed = RED4ext::ExecuteGlobalFunction("GetPlayer;GameInstance", &handle, gameInstance);
     bool present = executed && static_cast<bool>(handle);
 
@@ -162,14 +122,6 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
                          static_cast<std::size_t>(token));
     }
 
-    // Same fix as g_lastDispatchResult (DispatchRunningTick): log only on
-    // transition, not every frame -- this primitive is now called every
-    // frame by design, so an unconditional log here reproduces the same
-    // 6.6MB-in-minutes spam that запиши-лог above just fixed.
-    // -1 = never logged yet, so the very first call (even if present is
-    // false) still produces one line -- a plain `bool` here would have
-    // made "false" indistinguishable from "not logged yet" and silently
-    // swallowed the first observation.
     static int8_t loggedPresent = -1;
     const int8_t presentAsInt8 = present ? 1 : 0;
     if (presentAsInt8 != loggedPresent)
@@ -183,17 +135,6 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     return 0;
 }
 
-// The plugin's own directory, where the loader placed both this DLL and
-// wsm_my_lisp_cyberpunk_dll.dll side by side (RED4ext's own convention --
-// see docs/game-injection-plan.md's "(a) The standard, sanctioned path").
-// RAII guard over the loaded WSM module + its session. Every early-return
-// failure path during EMainReason::Load must leave neither dangling: this
-// guard's destructor calls wsm_session_free (if a session exists and the
-// export was found) and FreeLibrary (if the module is still loaded), unless
-// release() was called first. This replaces the previous pattern of
-// hand-repeating sessionFree+FreeLibrary on each failure branch, which had
-// already grown one real gap (the wsm_eval_string == nullptr path skipped
-// cleanup entirely).
 class WsmRuntimeGuard
 {
 public:
@@ -228,8 +169,6 @@ public:
         m_sessionFree = sessionFree;
     }
 
-    // Disarms the guard: ownership of module/session moves to the caller
-    // (the global g_wsmModule/g_wsmSession that outlive plugin Load).
     void Release()
     {
         m_released = true;
@@ -242,23 +181,6 @@ private:
     bool m_released = false;
 };
 
-// RED4ext викликає OnUpdate для Running на кожному frame -- АЛЕ лише якщо
-// повернуте значення не зупиняє подальші виклики. GameState.hpp's OnUpdate
-// doc-коментар: "Returning true will prevent the update function from
-// being called, returning false will keep calling the function until it
-// returns true." Живий тест (2026-09-11) реально зловив це: dispatch
-// відпрацював рівно ОДИН раз за весь сеанс, бо кожен шлях виходу повертав
-// `true`, попри окрему примітку в тому самому doc-коментарі, що "for
-// Running the return result will not matter" -- та примітка не збіглась
-// зі спостереженою поведінкою, тож код тепер довіряє буквальному
-// true/false-правилу, не їй.
-// Логується лише при ЗМІНІ результату dispatch, не щокадру -- сам виклик
-// wsm_eval_string і далі відбувається щокадру (return false нижче), лише
-// I/O в лог-файл дедупльований. Без цього фікс "тримати return false"
-// перетворив би одноразову тишу на протилежну крайність: сотні однакових
-// рядків логу щосекунди. Порожній рядок як стартове значення гарантовано
-// не збігається з жодним реальним Lisp-результатом (навіть "" з рядка,
-// бо printer завжди друкує "" з лапками для рядкового значення).
 std::string g_lastDispatchResult;
 
 bool DispatchRunningTick(RED4ext::CGameApplication*)
@@ -266,43 +188,29 @@ bool DispatchRunningTick(RED4ext::CGameApplication*)
     if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr ||
         g_logger == nullptr || g_dispatchSource.empty())
     {
-        // Постійна умова (Load ніколи не завершив handshake чи диспетчер не
-        // завантажився) -- навмисно return true: немає сенсу перевіряти це
-        // щокадру назавжди, якщо вона ніколи не стане іншою в цьому сеансі.
         return true;
     }
 
     char* result = g_wsmEvalString(g_wsmSession, g_dispatchSource.c_str());
     if (result == nullptr)
     {
-        // На відміну від відсутнього handshake вище, це помилка ОДНОГО
-        // конкретного tick -- наступний кадр може відпрацювати нормально,
-        // тож продовжуємо (return false), а не здаємось назавжди. Кожна
-        // окрема помилка все ж логується (не дедуплікується, на відміну
-        // від успішного результату) -- null є показником реального збою,
-        // не звичайного стану, який очікувано повторюється щокадру.
         g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: fixed Lisp dispatch returned null");
         return false;
     }
 
-    // Це observability, не protocol: C++ не порівнює результат із t/() і не
-    // робить з нього наступний крок. Наступний крок уже виконав `.my`.
     if (g_lastDispatchResult != result)
     {
         g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp dispatch => %s", result);
         g_lastDispatchResult = result;
     }
     g_wsmFreeString(result);
-    return false; // keep ticking every frame -- this is the fix
+    return false;
 }
 
 std::wstring GetOwnDirectory()
 {
     wchar_t path[MAX_PATH] = {};
     HMODULE self = nullptr;
-    // GetModuleHandleExW with GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS finds
-    // THIS DLL's own module handle from an address inside it (this
-    // function), regardless of what the game's own module search path is.
     if (!GetModuleHandleExW(
             GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
             reinterpret_cast<LPCWSTR>(&GetOwnDirectory),
@@ -322,16 +230,20 @@ std::wstring GetOwnDirectory()
 
 bool LoadDispatchSource(std::string& out)
 {
-    const std::filesystem::path dispatchPath =
-        std::filesystem::path(GetOwnDirectory()) / L"scripts" / L"диспетчер.мій";
-    std::ifstream source(dispatchPath, std::ios::binary);
-    if (!source)
+    // Equal surface spellings: prefer product Cyrillic диспетчер.мій, fall back to .my twins.
+    const std::filesystem::path scriptsDir =
+        std::filesystem::path(GetOwnDirectory()) / L"scripts";
+    std::filesystem::path used;
+    if (!surface_ext::LoadFirstExisting(surface_ext::DispatchCandidates(scriptsDir), out, &used))
     {
         return false;
     }
-
-    out.assign(std::istreambuf_iterator<char>(source), std::istreambuf_iterator<char>());
-    return !out.empty();
+    if (g_logger != nullptr)
+    {
+        // Log which spelling was found (UTF-8 path via u8string where available).
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: loaded dispatch source from scripts/");
+    }
+    return true;
 }
 } // namespace
 
@@ -352,10 +264,6 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         HMODULE wsmModule = LoadLibraryW(dllPath.c_str());
         if (wsmModule == nullptr)
         {
-            // GetLastError() is deliberately not decoded into a message
-            // here -- untested against a real failure case (wrong path,
-            // missing MSVC runtime, wrong bitness). A future pass should
-            // use FormatMessageW for a readable error, not just the code.
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: LoadLibraryW failed, GetLastError=%lu",
                             GetLastError());
             return false;
@@ -367,20 +275,19 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         if (sessionInit == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: GetProcAddress(wsm_session_init) failed");
-            return false; // guard frees wsmModule
+            return false;
         }
 
         Session* session = sessionInit();
         if (session == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: wsm_session_init returned null");
-            return false; // guard frees wsmModule
+            return false;
         }
 
         auto sessionFree =
             reinterpret_cast<WsmSessionFreeFn>(GetProcAddress(wsmModule, "wsm_session_free"));
-        guard.SetSession(session, sessionFree); // armed from here: every remaining
-                                                 // early return frees session + module
+        guard.SetSession(session, sessionFree);
 
         auto registerPrimitive =
             reinterpret_cast<WsmRegisterPrimitiveFn>(GetProcAddress(wsmModule, "wsm_register_primitive"));
@@ -393,35 +300,28 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             wrapGameHandle == nullptr || sessionFree == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: required WSM host ABI export is missing");
-            return false; // guard frees session + wsmModule
+            return false;
         }
 
         if (registerPrimitive(session, "запиши-лог", &LogPrimitive) != 0)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not register запиши-лог");
-            return false; // guard frees session + wsmModule
+            return false;
         }
 
         if (registerPrimitive(session, "гравець-присутній?", &PlayerPresentPrimitive) != 0)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not register гравець-присутній?");
-            return false; // guard frees session + wsmModule
+            return false;
         }
 
-        // Це перевірка лише evaluator/ABI, без виклику capability: C++ не
-        // вибирає жодної поведінки мода під час завантаження.
         char* result = evalString(session, "(quote ())");
         if (result == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: wsm_eval_string returned null");
-            return false; // guard frees session + wsmModule
+            return false;
         }
 
-        // The vertical slice's oracle expectation (docs/vertical-slice.md) is
-        // exactly "()", not merely "eval produced some non-null string". A
-        // non-nil/non-error result here means the runtime disagrees with the
-        // reference my-lisp oracle for this fixture, and plugin load must
-        // fail closed rather than report a false success.
         const bool matchesOracle = std::strcmp(result, "()") == 0;
         if (!matchesOracle)
         {
@@ -430,92 +330,80 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
                             "mismatch, failing load",
                             result);
             freeString(result);
-            return false; // guard frees session + wsmModule
+            return false;
         }
 
         logger->InfoF(aHandle, "my-lisp-cyberpunk: (quote ()) => %s", result);
         freeString(result);
 
-        std::string dispatchSource;
-        if (!LoadDispatchSource(dispatchSource))
+        if (!LoadDispatchSource(g_dispatchSource))
         {
-            logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not load scripts/диспетчер.мій");
+            logger->ErrorF(aHandle,
+                            "my-lisp-cyberpunk: could not load scripts/диспетчер.мій (or .my twin)");
             return false;
         }
 
-        logger->InfoF(aHandle,
-                       "my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session=%p", session);
+        RED4ext::GameState runningState{};
+        runningState.OnEnter = nullptr;
+        runningState.OnUpdate = &DispatchRunningTick;
+        runningState.OnExit = nullptr;
+        aSdk->gameStates->Add(aHandle, RED4ext::EGameStateType::Running, &runningState);
 
-        // Everything after this point owns the module/session for the
-        // plugin's lifetime; EMainReason::Unload releases them explicitly.
         g_wsmModule = wsmModule;
         g_wsmSession = session;
         g_wsmEvalString = evalString;
         g_wsmFreeString = freeString;
         g_wsmBind = bind;
         g_wsmWrapGameHandle = wrapGameHandle;
-        g_dispatchSource = std::move(dispatchSource);
         guard.Release();
 
-        // OnUpdate доставляє Running tick. RTTI торкається лише та
-        // capability, яку обере Lisp-диспетчер, а не сам C++ scheduler.
-        static RED4ext::v1::GameState playerPresentState{
-            .OnEnter = nullptr,
-            .OnUpdate = &DispatchRunningTick,
-            .OnExit = nullptr,
-        };
-        aSdk->gameStates->Add(aHandle, RED4ext::EGameStateType::Running, &playerPresentState);
-        break;
+        logger->InfoF(aHandle, "my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session ready");
+        return true;
     }
     case RED4ext::v1::EMainReason::Unload:
     {
-        g_gameHandles.Clear();
-        g_playerToken = 0;
         g_dispatchSource.clear();
-        if (g_wsmModule != nullptr)
-        {
-            if (g_wsmSession != nullptr)
-            {
-                auto sessionFree =
-                    reinterpret_cast<WsmSessionFreeFn>(GetProcAddress(g_wsmModule, "wsm_session_free"));
-                if (sessionFree != nullptr)
-                {
-                    sessionFree(g_wsmSession);
-                }
-                g_wsmSession = nullptr;
-            }
-            FreeLibrary(g_wsmModule);
-            g_wsmModule = nullptr;
-        }
+        g_lastDispatchResult.clear();
+        g_playerToken = 0;
+        g_gameHandles.Clear();
         g_wsmEvalString = nullptr;
         g_wsmFreeString = nullptr;
         g_wsmBind = nullptr;
         g_wsmWrapGameHandle = nullptr;
+        if (g_wsmSession != nullptr && g_wsmModule != nullptr)
+        {
+            auto sessionFree =
+                reinterpret_cast<WsmSessionFreeFn>(GetProcAddress(g_wsmModule, "wsm_session_free"));
+            if (sessionFree != nullptr)
+            {
+                sessionFree(g_wsmSession);
+            }
+            g_wsmSession = nullptr;
+        }
+        if (g_wsmModule != nullptr)
+        {
+            FreeLibrary(g_wsmModule);
+            g_wsmModule = nullptr;
+        }
         g_logger = nullptr;
         g_pluginHandle = nullptr;
-        break;
+        return true;
     }
+    default:
+        return true;
     }
-
-    return true;
 }
 
-RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::v1::PluginInfo* aInfo)
+RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo* aInfo)
 {
     aInfo->name = L"my-lisp-cyberpunk";
     aInfo->author = L"juv4uk";
-    aInfo->version = RED4EXT_V1_SEMVER(0, 1, 0);
-    // RUNTIME_VERSION_LATEST, not RUNTIME_VERSION_INDEPENDENT: since
-    // гравець-присутній? started calling RED4ext::ExecuteGlobalFunction
-    // against real game RTTI (GetPlayer;GameInstance, PlayerPuppet), this
-    // adapter is no longer merely a passive logger of the loading
-    // lifecycle -- INDEPENDENT would misrepresent that to RED4ext's own
-    // version-compatibility check.
-    aInfo->runtime = RED4EXT_V1_RUNTIME_VERSION_LATEST;
-    aInfo->sdk = RED4EXT_V1_SDK_VERSION_CURRENT;
+    aInfo->version = RED4EXT_SEMVER(0, 1, 0);
+    aInfo->runtime = RED4EXT_RUNTIME_INDEPENDENT;
+    aInfo->sdk = RED4EXT_SDK_LATEST;
 }
 
 RED4EXT_C_EXPORT uint32_t RED4EXT_CALL Supports()
 {
-    return RED4EXT_API_VERSION_1;
+    return RED4EXT_API_VERSION_LATEST;
 }
