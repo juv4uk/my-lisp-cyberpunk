@@ -1,0 +1,3 @@
+# Single-threaded tests: global Win64 arena is unsynchronized (see host-runtime README).
+[env]
+RUST_TEST_THREADS = "1"
