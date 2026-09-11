@@ -1,26 +1,51 @@
-# Встановлення RED4ext-плагіна на локальну копію гри (чернетка, не виконано)
+# Встановлення/оновлення RED4ext-плагіна на локальну копію гри
 
-Статус: план, ще не застосований. Готується під час обмеженого ліміту сесії — виконати пізніше.
+Статус: виконано й перевірено багато разів живими запусками (2026-09-10/11).
+Цей документ — актуальний checklist для оновлення плагіна після нового
+build, не гіпотетичний план.
 
-## Що потрібно зробити
+## Що потрібно скопіювати після кожної перезбірки
 
-1. **Встановити RED4ext** у `D:\games\Cyberpunk 2077 v.2.31 (2020)\Cyberpunk 2077\`:
-   - завантажити реліз з github.com/WopsS/RED4ext (не той форк у juv4uk — офіційний upstream, якщо тільки не вирішено інакше)
-   - розпакувати згідно інструкції RED4ext (зазвичай `bin/x64/`, `red4ext/` поруч з `bin/x64/Cyberpunk2077.exe`)
+RED4ext і сама гра встановлені один раз (`red4ext/RED4ext.dll` +
+`bin/x64/winmm.dll`) і не потребують повторної дії. Після кожного
+`cmake --build adapter/build --config Release` треба оновити **три**
+речі в `<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin/`, не
+лише dll-файли:
 
-2. **Скопіювати зібраний плагін**:
-   - з `wsm-my-lisp/plugin/build/.../wsm-my-lisp-cyberpunk-plugin.dll`
-   - у `<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin/wsm-my-lisp-cyberpunk-plugin.dll`
-   - поруч покласти `wsm_my_lisp_cyberpunk_dll.dll` (сама мовна DLL, з wsm-my-lisp/dll/target/release/) — плагін вантажить її через LoadLibraryW з власної директорії
+1. `my-lisp-cyberpunk-plugin.dll` (з `adapter/build/src/Release/`)
+2. `wsm_my_lisp_cyberpunk_dll.dll` (з `wsm-my-lisp/dll/target/x86_64-pc-windows-msvc/{debug,release}/`)
+3. **`scripts/` — уся папка**, не лише окремий файл (з `my-lisp-cyberpunk/scripts/*.мій`)
+   — забутий крок реально викликав `could not load scripts/диспетчер.мій`
+   у живому лозі (2026-09-11), не гіпотетичний ризик.
 
-3. **Перший тест**: запустити гру, перевірити RED4ext-лог (`red4ext/logs/`) на факт виклику `Main`/`wsm_session_init` — очікується рядок логу через `RED4ext::v1::Logger`, без крашу гри.
+```bash
+PLUGDIR="<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin"
+cp adapter/build/src/Release/my-lisp-cyberpunk-plugin.dll "$PLUGDIR/"
+cp ../wsm-my-lisp/dll/target/x86_64-pc-windows-msvc/debug/wsm_my_lisp_cyberpunk_dll.dll "$PLUGDIR/"
+mkdir -p "$PLUGDIR/scripts"
+cp scripts/*.мій "$PLUGDIR/scripts/"
+```
 
-## Ризики, які варто мати на увазі перед запуском
+DLL-файли, зайняті поточним процесом гри, неможливо перезаписати — гру
+треба закрити перед оновленням; зміна в `scripts/` теж не підхоплюється
+без перезапуску гри (диспетчер читається один раз при `Load`).
 
-- Це репак/Hydra-launcher копія, не офіційна Steam/GOG — поведінка антипіратського захисту з зовнішніми DLL у процесі не гарантована, можливий конфлікт або відмова запуску.
-- Перед тестом варто зробити бекап збережень (`%USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\`), про всяк випадок.
-- Рекомендується тестувати на новому/тестовому збереженні, не на основному прогресі.
+## Перевірка після запуску
 
-## Не виконано поки що
+```bash
+cat "<game_dir>/red4ext/logs/my-lisp-cyberpunk-plugin-*.log"
+```
 
-Жодна дія з цього списку ще не застосована на диску — це підготовчий документ, очікує явного дозволу власника перед фактичним встановленням RED4ext і копіюванням файлів у папку гри.
+Очікувана послідовність (з `docs/vertical-slice.md`): `(запиши-лог) => ()`
+одразу при завантаженні, далі `гравець-присутній?` через опитування щокадру
+в `Running`-стані, доки не з'явиться `t`.
+
+## Відомі ризики репаку
+
+- Репак/Hydra-launcher копія, не офіційна — поведінка антипіратського
+  захисту з зовнішніми DLL у процесі раніше не гарантувалась, але на
+  практиці RED4ext + плагін уже кілька разів успішно завантажувались і
+  гра стабільно запускалась.
+- Перед експериментами з capability, що змінюють стан (поза поточним v0
+  read-only scope), варто зробити бекап збережень
+  (`%USERPROFILE%\Saved Games\CD Projekt Red\Cyberpunk 2077\`).
