@@ -111,6 +111,41 @@ REDengine RTTI → symbolic object graph → my-lisp → query/inference/agents.
 Це відрізняється від "звичайного мод-набору команд" — Lisp досліджує живий
 об'єктний світ гри як дані, а не викликає фіксований список команд.
 
+## Конкретні наступні кроки (додано 2026-09-11)
+
+Порядок задач у `tasks.my` (глибоке проникнення):
+
+1. **CP-PLAYER-HANDLE-LIVE** (пріоритет 9.5)  
+   Живий transcript: `(гравець-присутній?)` → opaque `гравець` + token ≠ 0 у log.
+
+2. **CP-PLAYER-CLASSNAME** (9.0)  
+   Перша властивість: `(клас гравець)` → `PlayerPuppet`.
+
+3. **CP-PLAYER-WORLD-POSITION** (8.7)  
+   Прочитати WorldPosition / GetWorldPosition, повернути в Lisp.
+
+4. **CP-ONE-CHILD-WALK** (8.3)  
+   Один крок по object graph → новий opaque handle.
+
+5. **CP-READ-ONLY-METHOD-CALL** (8.0)  
+   Один read-only ExecuteFunction → результат у Lisp.
+
+6. **CP-RTTI-BRIDGE-DESIGN** (7.5)  
+   Generic bridge замість hardcoded примітивів.
+
+7. **CP-EVENT-HOOK-V1** (6.5)  
+   Перша реакція на engine event через fixed-dispatch.
+
+8. **CP-MUTATING-CAPABILITY-POLICY** (5.0, owner-required)  
+   Явне рішення власника про першу write-capability.
+
+Сценарії-фікстури підготовлені в `scripts/`:
+- `сценарій-гравець-клас.мій`
+- `сценарій-позиція.мій`
+- `сценарій-child.мій`
+
+Критерій готовності до наступного рівня: live transcript + oracle-перевірка в CLI.
+
 ## Роль інших репо в цій фазі
 
 - `my-lisp` — семантика opaque handle і capability boundary (вже готова)
