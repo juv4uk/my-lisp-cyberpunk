@@ -214,31 +214,58 @@ private:
     bool m_released = false;
 };
 
-// RED4ext викликає OnUpdate для Running на кожному frame. Це лише доставка
-// події у фіксовану точку входу: сценарій у scripts/диспетчер.мій вирішує,
-// які факти читати, які capabilities викликати й що робити з їх результатами.
-// Поточний ABI не має persistable Lisp definitions, тому dispatch v0 є одним
-// top-level `.my` виразом, завантаженим під час Load, без callback registry.
+// RED4ext викликає OnUpdate для Running на кожному frame -- АЛЕ лише якщо
+// повернуте значення не зупиняє подальші виклики. GameState.hpp's OnUpdate
+// doc-коментар: "Returning true will prevent the update function from
+// being called, returning false will keep calling the function until it
+// returns true." Живий тест (2026-09-11) реально зловив це: dispatch
+// відпрацював рівно ОДИН раз за весь сеанс, бо кожен шлях виходу повертав
+// `true`, попри окрему примітку в тому самому doc-коментарі, що "for
+// Running the return result will not matter" -- та примітка не збіглась
+// зі спостереженою поведінкою, тож код тепер довіряє буквальному
+// true/false-правилу, не їй.
+// Логується лише при ЗМІНІ результату dispatch, не щокадру -- сам виклик
+// wsm_eval_string і далі відбувається щокадру (return false нижче), лише
+// I/O в лог-файл дедупльований. Без цього фікс "тримати return false"
+// перетворив би одноразову тишу на протилежну крайність: сотні однакових
+// рядків логу щосекунди. Порожній рядок як стартове значення гарантовано
+// не збігається з жодним реальним Lisp-результатом (навіть "" з рядка,
+// бо printer завжди друкує "" з лапками для рядкового значення).
+std::string g_lastDispatchResult;
+
 bool DispatchRunningTick(RED4ext::CGameApplication*)
 {
     if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr ||
         g_logger == nullptr || g_dispatchSource.empty())
     {
+        // Постійна умова (Load ніколи не завершив handshake чи диспетчер не
+        // завантажився) -- навмисно return true: немає сенсу перевіряти це
+        // щокадру назавжди, якщо вона ніколи не стане іншою в цьому сеансі.
         return true;
     }
 
     char* result = g_wsmEvalString(g_wsmSession, g_dispatchSource.c_str());
     if (result == nullptr)
     {
+        // На відміну від відсутнього handshake вище, це помилка ОДНОГО
+        // конкретного tick -- наступний кадр може відпрацювати нормально,
+        // тож продовжуємо (return false), а не здаємось назавжди. Кожна
+        // окрема помилка все ж логується (не дедуплікується, на відміну
+        // від успішного результату) -- null є показником реального збою,
+        // не звичайного стану, який очікувано повторюється щокадру.
         g_logger->ErrorF(g_pluginHandle, "my-lisp-cyberpunk: fixed Lisp dispatch returned null");
-        return true;
+        return false;
     }
 
     // Це observability, не protocol: C++ не порівнює результат із t/() і не
     // робить з нього наступний крок. Наступний крок уже виконав `.my`.
-    g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp dispatch => %s", result);
+    if (g_lastDispatchResult != result)
+    {
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp dispatch => %s", result);
+        g_lastDispatchResult = result;
+    }
     g_wsmFreeString(result);
-    return true;
+    return false; // keep ticking every frame -- this is the fix
 }
 
 std::wstring GetOwnDirectory()
