@@ -1,3 +1,6 @@
 [submodule "adapter/deps/red4ext.sdk"]
 	path = adapter/deps/red4ext.sdk
 	url = https://github.com/WopsS/RED4ext.SDK.git
+[submodule "host-runtime/external/my-lisp"]
+	path = host-runtime/external/my-lisp
+	url = https://github.com/juv4uk/my-lisp.git

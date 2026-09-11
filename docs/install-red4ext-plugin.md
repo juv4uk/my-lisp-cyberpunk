@@ -13,7 +13,7 @@ RED4ext і сама гра встановлені один раз (`red4ext/RED4
 лише dll-файли:
 
 1. `my-lisp-cyberpunk-plugin.dll` (з `adapter/build/src/Release/`)
-2. `wsm_my_lisp_cyberpunk_dll.dll` (з `wsm-my-lisp/dll/target/x86_64-pc-windows-msvc/{debug,release}/`)
+2. `wsm_my_lisp_cyberpunk_dll.dll` — **тепер з `host-runtime/target/x86_64-pc-windows-msvc/{debug,release}/`**, не з сусіднього `wsm-my-lisp` checkout (host-runtime мігрував сюди 2026-09-11, `wsm-my-lisp#15` Phase C; див. `host-runtime/MIGRATION.md`)
 3. **`scripts/` — уся папка**, не лише окремий файл (з `my-lisp-cyberpunk/scripts/*.мій`)
    — забутий крок реально викликав `could not load scripts/диспетчер.мій`
    у живому лозі (2026-09-11), не гіпотетичний ризик.
@@ -21,7 +21,7 @@ RED4ext і сама гра встановлені один раз (`red4ext/RED4
 ```bash
 PLUGDIR="<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin"
 cp adapter/build/src/Release/my-lisp-cyberpunk-plugin.dll "$PLUGDIR/"
-cp ../wsm-my-lisp/dll/target/x86_64-pc-windows-msvc/debug/wsm_my_lisp_cyberpunk_dll.dll "$PLUGDIR/"
+cp host-runtime/target/x86_64-pc-windows-msvc/debug/wsm_my_lisp_cyberpunk_dll.dll "$PLUGDIR/"
 mkdir -p "$PLUGDIR/scripts"
 cp scripts/*.мій "$PLUGDIR/scripts/"
 ```
