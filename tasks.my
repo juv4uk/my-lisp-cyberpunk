@@ -42,9 +42,10 @@
      (acceptance . "No callback registry in v0 code without a new owner task.")))
    ("CP-LINK-WSM-PLUGIN" .
     ((priority . 8.0)
-     (done . nil)
-     (description . "Document dependency on wsm-my-lisp plugin/DLL builds; version pin when first in-game load works.")
-     (acceptance . "README points at exact wsm-my-lisp path and build instructions.")))
+     (done . t)
+     (evidence . ("adapter/README.md" "host-runtime/MIGRATION.md"))
+     (description . "Document dependency on wsm-my-lisp plugin/DLL builds; version pin when first in-game load works. Superseded 2026-09-11 by wsm-my-lisp#15 Phase C/D: Rust host runtime migrated into this repo's host-runtime/, wsm-my-lisp/dll deleted (their commit 1e1549a). Dependency is now internal (adapter → ../host-runtime), not cross-repo.")
+     (acceptance . "adapter/README.md points at host-runtime build output path, not a sibling wsm-my-lisp checkout — verified end-to-end (source committed, cargo build produces the DLL at that exact path, docs match).")))
    ("CP-LISP-OWNS-ORCHESTRATION-V0" .
     ((priority . 10.0)
      (done . t)
@@ -67,12 +68,12 @@
 
    ("CP-PLAYER-HANDLE-LIVE" .
     ((priority . 9.5)
-     (done . nil)
+     (done . t)
      (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
      (capabilities . (rtti read-only live-evidence))
-     (evidence . ("docs/cp-player-handle-live-runbook.md"))
+     (evidence . ("docs/cp-player-handle-live-runbook.md" "docs/vertical-slice.md"))
      (description . "Живий transcript у грі: (гравець-присутній?) повертає t, прив'язує opaque `гравець`, і результат видно в RED4ext log. Без цього не рухатись далі.")
-     (acceptance . "Один реальний log-фрагмент з Running + token ≠ 0 + (quote ()) oracle. Див. docs/cp-player-handle-live-runbook.md.")))
+     (acceptance . "Живий лог 2026-09-11: (quote ()) => (), present=false→true перехід, \"retained player as opaque token=1\", .my-диспетчер сам обрав викликати запиши-лог лише коли гравець присутній. Дедуплікація логу підтверджена (9 рядків, не 6.6MB). Один реальний log-фрагмент з Running + token ≠ 0 + (quote ()) oracle. Див. docs/cp-player-handle-live-runbook.md.")))
    ("CP-PLAYER-CLASSNAME" .
     ((priority . 9.0)
      (done . nil)
