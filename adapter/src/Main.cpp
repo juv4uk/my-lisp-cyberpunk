@@ -81,7 +81,20 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
         return 3;
     }
 
-    g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive запиши-лог invoked");
+    // DispatchRunningTick's fix (return false, keep polling every frame)
+    // means запиши-лог can now be invoked every frame while a .my script
+    // calls it unconditionally -- observed live: hundreds of identical
+    // "invoked" lines per second, 6.6MB log growth in minutes. This
+    // primitive always returns the same nil regardless of when/how often
+    // it's called, so repeat log lines carry no new information; log the
+    // first invocation only, as a liveness confirmation, not a running
+    // tally of calls.
+    static bool loggedOnce = false;
+    if (!loggedOnce)
+    {
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive запиши-лог invoked");
+        loggedOnce = true;
+    }
     *out = kWordNil;
     return 0;
 }
@@ -149,8 +162,23 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
                          static_cast<std::size_t>(token));
     }
 
-    g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive гравець-присутній? invoked, present=%s",
-                     present ? "true" : "false");
+    // Same fix as g_lastDispatchResult (DispatchRunningTick): log only on
+    // transition, not every frame -- this primitive is now called every
+    // frame by design, so an unconditional log here reproduces the same
+    // 6.6MB-in-minutes spam that запиши-лог above just fixed.
+    // -1 = never logged yet, so the very first call (even if present is
+    // false) still produces one line -- a plain `bool` here would have
+    // made "false" indistinguishable from "not logged yet" and silently
+    // swallowed the first observation.
+    static int8_t loggedPresent = -1;
+    const int8_t presentAsInt8 = present ? 1 : 0;
+    if (presentAsInt8 != loggedPresent)
+    {
+        g_logger->InfoF(g_pluginHandle,
+                         "my-lisp-cyberpunk: Lisp host primitive гравець-присутній? invoked, present=%s",
+                         present ? "true" : "false");
+        loggedPresent = presentAsInt8;
+    }
     *out = present ? kWordTrue : kWordNil;
     return 0;
 }
