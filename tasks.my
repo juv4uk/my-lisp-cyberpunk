@@ -59,4 +59,12 @@
      (evidence . ("adapter/tests/DispatchBenchmark.cpp" "docs/benchmarks.md"))
      (capabilities . (benchmark fixed-dispatch evidence))
      (description . "Створити Release x64 adapter harness, який вимірює fixed `.my` dispatch окремо від WSM microbench і реального RED4ext frame.")
-     (acceptance . "30 серій по 10 000 викликів після warm-up; BENCH_RESULT з median/p95; correctness witness і timing не змішані; live-game вимір іде окремо."))))))
+     (acceptance . "30 серій по 10 000 викликів після warm-up; BENCH_RESULT з median/p95; correctness witness і timing не змішані; live-game вимір іде окремо.")))
+   ("CP-LISP-HARDWARE-OPTIMIZER" .
+    ((priority . 3.0)
+     (done . nil)
+     (origin . owner-dream)
+     (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
+     (capabilities . (rtti-read game-settings hardware-profile))
+     (description . "Майбутнє: my-lisp сам вирішує/пропонує налаштування графіки Cyberpunk 2077 під конкретне залізо власника (профіль з wsm-os/docs/OWNER-HARDWARE-PROFILE.md — i5-6400, GTX 1050 Ti 4GB, 16GB DDR4-2133), а не C++/людина вручну редагує UserSettings.json. Ручне налаштування (2026-09-10/11) показало: більшість реального запасу продуктивності вже вичерпана статичним налаштуванням presets — справжня цінність Lisp-шару тут була б у ДИНАМІЧНОМУ рішенні (читати поточний FPS/frame time через RTTI, як зробити power-of-two decision про conditional-quality в реальному часі), не в одноразовій заміні полів JSON.")
+     (acceptance . "Не визначено — записано як мрія/напрям, не задача з конкретним acceptance. Перший крок, коли до цього дійде: власник вирішує, чи це read-only advisory (Lisp пропонує, людина застосовує) чи write capability (Lisp сам змінює UserSettings.json/live game state) — той самий read-only-перший принцип, що й для player-handle capabilities.")))))))
