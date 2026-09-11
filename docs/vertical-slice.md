@@ -4,8 +4,13 @@
 
 `(запиши-лог)` живим запуском у грі підтверджено тричі (2026-09-10,
 RED4ext v1.30.0, Cyberpunk 2077 v2.31) — transcript в закритому issue
-`my-lisp-cyberpunk#1`. `(гравець-присутній?)` — друга, теж read-only
-capability, зібрана, ще не перевірена живим запуском.
+`my-lisp-cyberpunk#1`.
+
+`(гравець-присутній?)` — друга, теж read-only capability, зібрана.
+**Наступний обов'язковий крок:** live transcript opaque player handle
+(задача `CP-PLAYER-HANDLE-LIVE`). Runbook:
+[`docs/cp-player-handle-live-runbook.md`](cp-player-handle-live-runbook.md).
+
 Коли вона вперше бачить гравця, адаптер прив'язує Lisp-ім'я `гравець`
 до `#<game-handle>` без розкриття адреси REDengine.
 
@@ -75,8 +80,8 @@ fixed-dispatch; він не замінює потрібний live transcript у
 
 ## Ще не перевірено живим запуском
 
-- `(гравець-присутній?)` — зібрано, ще не запущено в грі з оновленим
-  плагіном.
+- `(гравець-присутній?)` + opaque token `гравець` — зібрано, чекає
+  live transcript (див. runbook вище).
 
 ## Відомі межі
 

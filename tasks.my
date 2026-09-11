@@ -2,6 +2,7 @@
 ; Product-surface repo for my-lisp inside Cyberpunk 2077 (CET/RED4ext analogy).
 ; Created 2026-09-10 empty; recommendations set 2026-09-10 from cross-repo review.
 ; Updated 2026-09-11: deep-penetration task ladder after v0 fixed-dispatch.
+; Updated 2026-09-11 (2): CP-PLAYER-HANDLE-LIVE runbook + acceptance ready.
 ; my-lisp remains sole language authority. Runtime embed work (win64 nucleus,
 ; reader/eval/ffi) lives in wsm-my-lisp (dll/). Cyberpunk-specific RED4ext
 ; integration (this repo's adapter/) does not live in wsm-my-lisp. This repo
@@ -69,8 +70,9 @@
      (done . nil)
      (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
      (capabilities . (rtti read-only live-evidence))
+     (evidence . ("docs/cp-player-handle-live-runbook.md"))
      (description . "Живий transcript у грі: (гравець-присутній?) повертає t, прив'язує opaque `гравець`, і результат видно в RED4ext log. Без цього не рухатись далі.")
-     (acceptance . "Один реальний log-фрагмент з Running + token ≠ 0 + (quote ()) oracle.")))
+     (acceptance . "Один реальний log-фрагмент з Running + token ≠ 0 + (quote ()) oracle. Див. docs/cp-player-handle-live-runbook.md.")))
    ("CP-PLAYER-CLASSNAME" .
     ((priority . 9.0)
      (done . nil)
