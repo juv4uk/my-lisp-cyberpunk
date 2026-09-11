@@ -2,7 +2,8 @@
 #
 # The adapter loads the host-neutral WSM runtime DLL into the Cyberpunk 2077
 # process and initializes one Lisp session. It deliberately contains no Lisp
-# reader/evaluator implementation: that belongs to wsm-my-lisp.
+# reader/evaluator implementation: that lives in ../host-runtime (migrated
+# from wsm-my-lisp/dll, wsm-my-lisp#15 Phase C — see host-runtime/MIGRATION.md).
 cmake_minimum_required(VERSION 3.21)
 
 project(

@@ -1,8 +1,9 @@
 # RED4ext adapter
 
 Це Cyberpunk-specific host adapter. Він не містить reader, evaluator,
-семантику Lisp або машинне кодування значень: усе це лишається в
-[`wsm-my-lisp`](https://github.com/juv4uk/wsm-my-lisp).
+семантику Lisp або машинне кодування значень: усе це живе в
+[`../host-runtime`](../host-runtime) (мігровано з `wsm-my-lisp/dll`,
+`wsm-my-lisp#15` Phase C — див. `host-runtime/MIGRATION.md`).
 
 Сам факт завантаження плагіна в процес гри є новою інтеграційною дією.
 Його поведінка при цьому повністю reversible:
@@ -13,7 +14,7 @@
 ## Межа відповідальності
 
 - `my-lisp` визначає значення програми й фікстури.
-- `wsm-my-lisp` надає host-neutral DLL і її FFI.
+- `host-runtime` (цей репо, мігровано з `wsm-my-lisp/dll`) надає host-neutral DLL і її FFI.
 - цей каталог тримає RED4ext SDK та код, що розмовляє з процесом гри.
 
 ## Fixed dispatch v0
@@ -42,7 +43,10 @@ cmake --build adapter/build --config Release
 Для фактичного тесту потрібні разом:
 
 1. `my-lisp-cyberpunk-plugin.dll`;
-2. `wsm_my_lisp_cyberpunk_dll.dll`, зібрана у `wsm-my-lisp`;
+2. `wsm_my_lisp_cyberpunk_dll.dll`, зібрана в `../host-runtime` (`cargo build
+   --target x86_64-pc-windows-msvc`, вихід у
+   `host-runtime/target/x86_64-pc-windows-msvc/{debug,release}/`) — **не** з
+   сусіднього `wsm-my-lisp` checkout;
 3. RED4ext і тестова копія Cyberpunk 2077.
 
 Перший успішний запуск треба зафіксувати в `docs/` реальним фрагментом
