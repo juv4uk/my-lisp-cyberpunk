@@ -196,3 +196,29 @@ mod section_4_unknown_symbol {
         );
     }
 }
+
+/// §5: BoxedValue::Rational parity against my-lisp's conformance.my
+/// compiler-corpus fixture `(/ 5 6 8 7)` -> `5/336` (the same oracle
+/// wsm-my-lisp's parity table for wsm-my-lisp#4 references). Added after
+/// wsm-my-lisp found this crate's Rational support (83be6e9) had no
+/// parity coverage here, unlike String/GameHandle above.
+mod section_5_boxed_rational {
+    use super::*;
+
+    #[test]
+    fn rational_prints_as_reduced_fraction() {
+        let mut strings = BoxedTable::new();
+        // (/ 5 6 8 7) = 5/336, my-lisp oracle: conformance.my compiler-corpus fixture
+        let word = strings.add_rational(5, 336);
+        let symbols = SymbolTable::new();
+        assert_eq!(value_to_string(word, &symbols, &strings), "5/336");
+    }
+
+    #[test]
+    fn rational_reduces_at_construction() {
+        let mut strings = BoxedTable::new();
+        let word = strings.add_rational(10, 20); // must reduce to 1/2
+        let symbols = SymbolTable::new();
+        assert_eq!(value_to_string(word, &symbols, &strings), "1/2");
+    }
+}
