@@ -15,17 +15,17 @@
 namespace
 {
 using Session = void;
-constexpr uint64_t kWordNil = 1;
-constexpr uint64_t kWordTrue = 2;
-
 using WsmSessionInitFn = Session* (*)();
 using WsmSessionFreeFn = void (*)(Session*);
 using WsmHostPrimitiveFn = int32_t (*)(std::size_t argc, const uint64_t* argv, uint64_t* out);
 using WsmRegisterPrimitiveFn = int32_t (*)(Session*, const char*, WsmHostPrimitiveFn);
 using WsmEvalStringFn = char* (*)(Session*, const char*);
 using WsmFreeStringFn = void (*)(char*);
+using WsmWordFn = uint64_t (*)();
 
 int g_logCalls = 0;
+uint64_t g_wordNil = 0;
+uint64_t g_wordTrue = 0;
 
 int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
@@ -34,7 +34,7 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
         return 1;
     }
     ++g_logCalls;
-    *out = kWordNil;
+    *out = g_wordNil;
     return 0;
 }
 
@@ -44,7 +44,7 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     {
         return 1;
     }
-    *out = kWordTrue;
+    *out = g_wordTrue;
     return 0;
 }
 
@@ -66,12 +66,17 @@ bool RunScenario(HMODULE module, const std::filesystem::path& scenario, int expe
         reinterpret_cast<WsmRegisterPrimitiveFn>(GetProcAddress(module, "wsm_register_primitive"));
     const auto evalString = reinterpret_cast<WsmEvalStringFn>(GetProcAddress(module, "wsm_eval_string"));
     const auto freeString = reinterpret_cast<WsmFreeStringFn>(GetProcAddress(module, "wsm_free_string"));
+    const auto wordNil = reinterpret_cast<WsmWordFn>(GetProcAddress(module, "wsm_word_nil"));
+    const auto wordTrue = reinterpret_cast<WsmWordFn>(GetProcAddress(module, "wsm_word_true"));
     if (sessionInit == nullptr || sessionFree == nullptr || registerPrimitive == nullptr || evalString == nullptr ||
-        freeString == nullptr)
+        freeString == nullptr || wordNil == nullptr || wordTrue == nullptr)
     {
         std::cerr << "witness: WSM ABI export missing\n";
         return false;
     }
+
+    g_wordNil = wordNil();
+    g_wordTrue = wordTrue();
 
     const std::string source = ReadSource(scenario);
     if (source.empty())

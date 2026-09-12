@@ -23,9 +23,6 @@ namespace
 {
 using Session = void;
 
-constexpr uint64_t kWordNil = 1;
-constexpr uint64_t kWordTrue = 2;
-
 using WsmSessionInitFn = Session* (*)();
 using WsmSessionFreeFn = void (*)(Session*);
 using WsmHostPrimitiveFn = int32_t (*)(std::size_t argc, const uint64_t* argv, uint64_t* out);
@@ -34,6 +31,7 @@ using WsmBindFn = int32_t (*)(Session*, const char*, uint64_t);
 using WsmEvalStringFn = char* (*)(Session*, const char*);
 using WsmFreeStringFn = void (*)(char*);
 using WsmWrapGameHandleFn = int32_t (*)(Session*, void*, uint64_t*);
+using WsmWordFn = uint64_t (*)();
 
 HMODULE g_wsmModule = nullptr;
 Session* g_wsmSession = nullptr;
@@ -43,6 +41,8 @@ WsmEvalStringFn g_wsmEvalString = nullptr;
 WsmFreeStringFn g_wsmFreeString = nullptr;
 WsmBindFn g_wsmBind = nullptr;
 WsmWrapGameHandleFn g_wsmWrapGameHandle = nullptr;
+uint64_t g_wordNil = 0;
+uint64_t g_wordTrue = 0;
 GameHandleTable g_gameHandles;
 GameHandleTable::Token g_playerToken = 0;
 std::string g_dispatchSource;
@@ -68,7 +68,7 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
         g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive запиши-лог invoked");
         loggedOnce = true;
     }
-    *out = kWordNil;
+    *out = g_wordNil;
     return 0;
 }
 
@@ -131,7 +131,7 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
                          present ? "true" : "false");
         loggedPresent = presentAsInt8;
     }
-    *out = present ? kWordTrue : kWordNil;
+    *out = present ? g_wordTrue : g_wordNil;
     return 0;
 }
 
@@ -296,8 +296,10 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         auto freeString = reinterpret_cast<WsmFreeStringFn>(GetProcAddress(wsmModule, "wsm_free_string"));
         auto wrapGameHandle =
             reinterpret_cast<WsmWrapGameHandleFn>(GetProcAddress(wsmModule, "wsm_wrap_game_handle"));
+        auto wordNil = reinterpret_cast<WsmWordFn>(GetProcAddress(wsmModule, "wsm_word_nil"));
+        auto wordTrue = reinterpret_cast<WsmWordFn>(GetProcAddress(wsmModule, "wsm_word_true"));
         if (registerPrimitive == nullptr || bind == nullptr || evalString == nullptr || freeString == nullptr ||
-            wrapGameHandle == nullptr || sessionFree == nullptr)
+            wrapGameHandle == nullptr || wordNil == nullptr || wordTrue == nullptr || sessionFree == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: required WSM host ABI export is missing");
             return false;
@@ -355,6 +357,8 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_wsmFreeString = freeString;
         g_wsmBind = bind;
         g_wsmWrapGameHandle = wrapGameHandle;
+        g_wordNil = wordNil();
+        g_wordTrue = wordTrue();
         guard.Release();
 
         logger->InfoF(aHandle, "my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session ready");
@@ -370,6 +374,8 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_wsmFreeString = nullptr;
         g_wsmBind = nullptr;
         g_wsmWrapGameHandle = nullptr;
+        g_wordNil = 0;
+        g_wordTrue = 0;
         if (g_wsmSession != nullptr && g_wsmModule != nullptr)
         {
             auto sessionFree =

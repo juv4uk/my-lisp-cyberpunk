@@ -19,8 +19,6 @@
 namespace
 {
 using Session = void;
-constexpr uint64_t kWordNil = 1;
-constexpr uint64_t kWordTrue = 2;
 constexpr std::size_t kWarmupIterations = 1'000;
 constexpr std::size_t kSeriesCount = 30;
 constexpr std::size_t kIterationsPerSeries = 10'000;
@@ -31,6 +29,7 @@ using WsmHostPrimitiveFn = int32_t (*)(std::size_t argc, const uint64_t* argv, u
 using WsmRegisterPrimitiveFn = int32_t (*)(Session*, const char*, WsmHostPrimitiveFn);
 using WsmEvalStringFn = char* (*)(Session*, const char*);
 using WsmFreeStringFn = void (*)(char*);
+using WsmWordFn = uint64_t (*)();
 
 struct WsmApi
 {
@@ -39,6 +38,8 @@ struct WsmApi
     WsmRegisterPrimitiveFn registerPrimitive = nullptr;
     WsmEvalStringFn evalString = nullptr;
     WsmFreeStringFn freeString = nullptr;
+    WsmWordFn wordNil = nullptr;
+    WsmWordFn wordTrue = nullptr;
 };
 
 struct BenchmarkCase
@@ -51,6 +52,8 @@ struct BenchmarkCase
 
 bool g_playerPresent = false;
 std::size_t g_logCalls = 0;
+uint64_t g_wordNil = 0;
+uint64_t g_wordTrue = 0;
 
 int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
@@ -59,7 +62,7 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
         return 1;
     }
     ++g_logCalls;
-    *out = kWordNil;
+    *out = g_wordNil;
     return 0;
 }
 
@@ -69,7 +72,7 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     {
         return 1;
     }
-    *out = g_playerPresent ? kWordTrue : kWordNil;
+    *out = g_playerPresent ? g_wordTrue : g_wordNil;
     return 0;
 }
 
@@ -114,12 +117,16 @@ bool LoadApi(HMODULE module, WsmApi& api)
         reinterpret_cast<WsmRegisterPrimitiveFn>(GetProcAddress(module, "wsm_register_primitive"));
     api.evalString = reinterpret_cast<WsmEvalStringFn>(GetProcAddress(module, "wsm_eval_string"));
     api.freeString = reinterpret_cast<WsmFreeStringFn>(GetProcAddress(module, "wsm_free_string"));
+    api.wordNil = reinterpret_cast<WsmWordFn>(GetProcAddress(module, "wsm_word_nil"));
+    api.wordTrue = reinterpret_cast<WsmWordFn>(GetProcAddress(module, "wsm_word_true"));
     return api.sessionInit != nullptr && api.sessionFree != nullptr && api.registerPrimitive != nullptr &&
-           api.evalString != nullptr && api.freeString != nullptr;
+           api.evalString != nullptr && api.freeString != nullptr && api.wordNil != nullptr && api.wordTrue != nullptr;
 }
 
 bool RunCase(const WsmApi& api, const BenchmarkCase& benchmark)
 {
+    g_wordNil = api.wordNil();
+    g_wordTrue = api.wordTrue();
     const std::string source = ReadSource(benchmark.sourcePath);
     if (source.empty())
     {

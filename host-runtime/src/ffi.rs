@@ -48,6 +48,19 @@ use crate::printer::value_to_string;
 use crate::reader::{self, ReadError};
 use crate::word::{BoxedTable, SymbolTable};
 
+/// Повертає єдине ABI-представлення порожнього списку, щоб host не дублював
+/// Word encoding поза runtime.
+#[unsafe(no_mangle)]
+pub extern "C" fn wsm_word_nil() -> u64 {
+    crate::word::WORD_NIL
+}
+
+/// Повертає канонічне Lisp `t`, а не умовне host-значення truthy.
+#[unsafe(no_mangle)]
+pub extern "C" fn wsm_word_true() -> u64 {
+    crate::word::SYM_T_WORD
+}
+
 pub struct Session {
     env: Env,
     symbols: SymbolTable,
@@ -733,5 +746,11 @@ mod tests {
 
             wsm_session_free(session);
         }
+    }
+
+    #[test]
+    fn host_word_exports_preserve_canonical_lisp_identity() {
+        assert_eq!(wsm_word_nil(), crate::word::WORD_NIL);
+        assert_eq!(wsm_word_true(), crate::word::SYM_T_WORD);
     }
 }
