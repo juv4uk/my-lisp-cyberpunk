@@ -9,6 +9,7 @@ listed below, this file and the docs it points to win; anything in
 - [`README.md`](README.md) — repo role, dependency graph (my-lisp / host-runtime / adapter / cml).
 - [`host-runtime/MIGRATION.md`](host-runtime/MIGRATION.md), [`host-runtime/VENDOR.md`](host-runtime/VENDOR.md) — Rust host embed, migrated from `wsm-my-lisp/dll` (Phase C/D both done).
 - [`adapter/README.md`](adapter/README.md) — RED4ext host adapter.
+- [`docs/function-identity-table.md`](docs/function-identity-table.md) — ECO-CANON-1 audit: which function/value identities are Canon (my-lisp-owned) vs host-only (this repo-owned), no drift found.
 
 ## Current status / evidence
 
