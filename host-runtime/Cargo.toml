@@ -18,5 +18,9 @@ path = "src/bin/oom_trigger.rs"
 name = "bench"
 path = "src/bin/bench.rs"
 
+[[bin]]
+name = "car-type-error-trigger"
+path = "src/bin/car_type_error_trigger.rs"
+
 [profile.release]
 debug = true
