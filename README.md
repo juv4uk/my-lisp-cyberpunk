@@ -6,19 +6,22 @@ Lisp-сесію та виконує один read-only вертикальний 
 
 **Мета:** REPL / скрипти my-lisp у Cyberpunk 2077 (аналогія CET/Lua, шлях RED4ext).
 
-## Host runtime (міграція 2026-09-11)
+## Host runtime (міграція 2026-09-11, Phase C+D завершені)
 
-**Канонічне місце** Windows embed runtime: [`host-runtime/`](host-runtime/).
+**Канонічне й єдине місце** Windows embed runtime: [`host-runtime/`](host-runtime/) —
+реальні закомічені джерела (`eval.rs`/`reader.rs`/`printer.rs`/`word.rs`/`ffi.rs`/
+`asm/nucleus-win64.s`/`build.rs`), не sync-скрипт.
 
-Раніше: `wsm-my-lisp/dll/` (там лишається mirror до Phase D).  
-Self-hosting SysV nucleus **не** переїжджає — він у `wsm-my-lisp`.
+Раніше: `wsm-my-lisp/dll/` — видалено з їхнього боку (Phase D, коміт `1e1549a`).
+Self-hosting SysV nucleus **не** переїжджав — він і далі в `wsm-my-lisp`.
 
 ```bash
-bash host-runtime/scripts/sync-from-wsm-my-lisp.sh   # перший раз
-cd host-runtime && cargo test --target x86_64-pc-windows-msvc
+cd host-runtime && git submodule update --init external/my-lisp
+cargo test --target x86_64-pc-windows-msvc
 ```
 
-Див. [`host-runtime/MIGRATION.md`](host-runtime/MIGRATION.md).
+Див. [`host-runtime/MIGRATION.md`](host-runtime/MIGRATION.md) /
+[`host-runtime/VENDOR.md`](host-runtime/VENDOR.md).
 
 ## Дисципліна
 
