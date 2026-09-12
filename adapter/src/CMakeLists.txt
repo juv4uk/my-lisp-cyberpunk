@@ -46,6 +46,12 @@ add_executable(
   ../tests/DispatchWitness.cpp
 )
 
+target_include_directories(
+  my-lisp-cyberpunk-dispatch-witness
+  PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
 if(MSVC)
   target_compile_options(my-lisp-cyberpunk-dispatch-witness PRIVATE /utf-8)
 endif()

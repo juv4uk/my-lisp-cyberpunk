@@ -10,6 +10,7 @@
 #include <windows.h>
 
 #include "GameHandleTable.hpp"
+#include "PlayerHandleEpoch.hpp"
 #include "SurfaceExt.hpp"
 
 #include <cstddef>
@@ -89,39 +90,52 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 
     RED4ext::ScriptGameInstance gameInstance;
     RED4ext::Handle<RED4ext::IScriptable> handle;
-    bool executed = RED4ext::ExecuteGlobalFunction("GetPlayer;GameInstance", &handle, gameInstance);
-    bool present = executed && static_cast<bool>(handle);
+    const bool executed = RED4ext::ExecuteGlobalFunction("GetPlayer;GameInstance", &handle, gameInstance);
+    const bool present = executed && static_cast<bool>(handle);
+    const auto retainedHandle = g_gameHandles.Resolve(g_playerToken);
+    const auto action = player_handle_epoch::Decide(executed, handle.GetPtr(), retainedHandle.GetPtr());
 
-    if (present && g_playerToken == 0)
+    if (action == player_handle_epoch::Action::BindNil)
     {
-        if (g_wsmSession == nullptr || g_wsmWrapGameHandle == nullptr || g_wsmBind == nullptr)
+        if (g_wsmSession == nullptr || g_wsmBind == nullptr || g_wsmBind(g_wsmSession, "гравець", g_wordNil) != 0)
         {
             return 4;
         }
-
-        const auto token = g_gameHandles.Retain(std::move(handle));
-        if (token == 0)
+        g_gameHandles.Release(g_playerToken);
+        g_playerToken = 0;
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: released absent player handle");
+    }
+    else if (action == player_handle_epoch::Action::BindNew)
+    {
+        if (g_wsmSession == nullptr || g_wsmWrapGameHandle == nullptr || g_wsmBind == nullptr)
         {
             return 5;
         }
 
-        uint64_t playerWord = 0;
-        if (g_wsmWrapGameHandle(g_wsmSession, GameHandleTable::ToOpaqueToken(token), &playerWord) != 0)
+        const auto nextToken = g_gameHandles.Retain(std::move(handle));
+        if (nextToken == 0)
         {
-            g_gameHandles.Release(token);
             return 6;
+        }
+
+        uint64_t playerWord = 0;
+        if (g_wsmWrapGameHandle(g_wsmSession, GameHandleTable::ToOpaqueToken(nextToken), &playerWord) != 0)
+        {
+            g_gameHandles.Release(nextToken);
+            return 7;
         }
         if (g_wsmBind(g_wsmSession, "гравець", playerWord) != 0)
         {
-            g_gameHandles.Release(token);
-            return 7;
+            g_gameHandles.Release(nextToken);
+            return 8;
         }
 
-        g_playerToken = token;
-        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: retained player as opaque token=%zu",
-                         static_cast<std::size_t>(token));
+        const auto previousToken = g_playerToken;
+        g_playerToken = nextToken;
+        g_gameHandles.Release(previousToken);
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: bound current player as opaque token=%zu",
+                         static_cast<std::size_t>(nextToken));
     }
-
     static int8_t loggedPresent = -1;
     const int8_t presentAsInt8 = present ? 1 : 0;
     if (presentAsInt8 != loggedPresent)

@@ -4,6 +4,8 @@
 
 #include <windows.h>
 
+#include "PlayerHandleEpoch.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -119,8 +121,25 @@ bool RunScenario(HMODULE module, const std::filesystem::path& scenario, int expe
 }
 } // namespace
 
+bool VerifyPlayerHandleEpochLogic()
+{
+    const auto playerA = reinterpret_cast<const void*>(static_cast<std::uintptr_t>(0xA));
+    const auto playerB = reinterpret_cast<const void*>(static_cast<std::uintptr_t>(0xB));
+
+    return player_handle_epoch::Decide(true, playerA, nullptr) == player_handle_epoch::Action::BindNew &&
+           player_handle_epoch::Decide(true, playerA, playerA) == player_handle_epoch::Action::Keep &&
+           player_handle_epoch::Decide(true, playerB, playerA) == player_handle_epoch::Action::BindNew &&
+           player_handle_epoch::Decide(true, nullptr, playerA) == player_handle_epoch::Action::BindNil &&
+           player_handle_epoch::Decide(false, nullptr, playerA) == player_handle_epoch::Action::Preserve;
+}
+
 int main(int argc, char** argv)
 {
+    if (!VerifyPlayerHandleEpochLogic())
+    {
+        std::cerr << "witness: player handle epoch logic failed\n";
+        return 5;
+    }
     if (argc != 4)
     {
         std::cerr << "usage: dispatch-witness <wsm-dll> <log-scenario.мій> <silent-scenario.мій>\n";
