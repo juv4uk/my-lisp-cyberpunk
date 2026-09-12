@@ -27,6 +27,7 @@ unsafe extern "C" {
     #[allow(dead_code)]
     pub fn wsm_atom(context: *mut core::ffi::c_void, value: u64) -> u64;
     pub fn wsm_arena_reset(context: *mut core::ffi::c_void);
+    pub fn wsm_arena_capacity(context: *mut core::ffi::c_void) -> usize;
 }
 
 #[unsafe(no_mangle)]

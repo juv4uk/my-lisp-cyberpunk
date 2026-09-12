@@ -14,7 +14,7 @@
 //! `\n`/unicode escapes -- none of my-lisp's fixtures needed them.
 
 use crate::word::{encode_fixnum, BoxedTable, SymbolTable, WORD_NIL};
-use crate::wsm_cons;
+use crate::{wsm_arena_capacity, wsm_cons};
 
 #[derive(Debug, PartialEq)]
 pub enum ReadError {
@@ -22,6 +22,7 @@ pub enum ReadError {
     UnexpectedCloseParen,
     UnterminatedString,
     TrailingInput(String),
+    ArenaCapacityExceeded { required: usize, capacity: usize },
 }
 
 enum Token {
@@ -104,6 +105,12 @@ fn atom_to_word(atom: &str, symbols: &mut SymbolTable) -> u64 {
 /// unbalanced parens, and unterminated string literals.
 pub fn read_one(source: &str, symbols: &mut SymbolTable, strings: &mut BoxedTable) -> Result<u64, ReadError> {
     let tokens = tokenize(source)?;
+    if let Some(required) = required_cons_cells(&tokens) {
+        let capacity = unsafe { wsm_arena_capacity(core::ptr::null_mut()) };
+        if required > capacity {
+            return Err(ReadError::ArenaCapacityExceeded { required, capacity });
+        }
+    }
     let mut pos = 0;
     let word = parse_form(&tokens, &mut pos, symbols, strings)?;
     if pos != tokens.len() {
@@ -119,6 +126,33 @@ pub fn read_one(source: &str, symbols: &mut SymbolTable, strings: &mut BoxedTabl
         return Err(ReadError::TrailingInput(rest.join(" ")));
     }
     Ok(word)
+}
+
+fn required_cons_cells(tokens: &[Token]) -> Option<usize> {
+    if !matches!(tokens.first(), Some(Token::Open)) {
+        return Some(0);
+    }
+
+    let mut depth = 0usize;
+    let mut required = 0usize;
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            Token::Open => {
+                depth += 1;
+                if index != 0 {
+                    required += 1;
+                }
+            }
+            Token::Close => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(required);
+                }
+            }
+            Token::Atom(_) | Token::Str(_) => required += 1,
+        }
+    }
+    None
 }
 
 fn parse_form(
@@ -283,5 +317,17 @@ mod tests {
         let mut strings = BoxedTable::new();
         let err = read_one(")", &mut symbols, &mut strings).unwrap_err();
         assert_eq!(err, ReadError::UnexpectedCloseParen);
+    }
+
+    #[test]
+    fn rejects_a_complete_form_larger_than_the_arena_before_allocation() {
+        let mut symbols = SymbolTable::new();
+        let mut strings = BoxedTable::new();
+        let source = format!("(f {})", std::iter::repeat_n("a", 256).collect::<Vec<_>>().join(" "));
+
+        assert_eq!(
+            read_one(&source, &mut symbols, &mut strings),
+            Err(ReadError::ArenaCapacityExceeded { required: 257, capacity: 256 })
+        );
     }
 }

@@ -157,6 +157,14 @@ wsm_arena_reset:
     movq    %rax, wsm_arena_next(%rip)
     ret
 
+/* wsm_arena_capacity(context [rcx, ignored]) -> usize [rax]. Це лише
+ * запит межі arena для host reader: він перевіряє форму до першого
+ * wsm_cons, щоб некоректний зовнішній source не міг потрапити у OOM path. */
+    .globl wsm_arena_capacity
+wsm_arena_capacity:
+    movl    $ARENA_CELLS, %eax
+    ret
+
     /* wsm_fail_win64(code: u32 [ecx], a: Word [rdx], b: Word [r8]) -> ! --
      * NOT defined in this file. Provided by the Rust DLL wrapper crate
      * (extern "C" fn wsm_fail_win64, Win64 ABI, must not return). See
@@ -167,7 +175,8 @@ wsm_arena_reset:
     .align 16
     /* 4096 bytes = 256 cons cells, same bound as nucleus.s -- see that
      * file's header for why this stays small and fixed. */
-    .equ ARENA_BYTES, 4096
+    .equ ARENA_CELLS, 256
+    .equ ARENA_BYTES, (ARENA_CELLS * 16)
 wsm_arena:
     .zero ARENA_BYTES
 

@@ -223,6 +223,9 @@ fn eval_str(session: &mut Session, text: &str) -> String {
         Err(ReadError::UnexpectedCloseParen) => return "error: unexpected ')'".to_string(),
         Err(ReadError::UnterminatedString) => return "error: unterminated string literal".to_string(),
         Err(ReadError::TrailingInput(rest)) => return format!("error: trailing input: {rest}"),
+        Err(ReadError::ArenaCapacityExceeded { required, capacity }) => {
+            return format!("error: form needs {required} cons cells; arena capacity is {capacity}")
+        }
     };
     match eval::eval(word, &session.env, &session.symbols) {
         Ok(result) => value_to_string(result, &session.symbols, &session.boxed),
