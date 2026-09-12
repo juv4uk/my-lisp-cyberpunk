@@ -1,3 +1,8 @@
+> **ARCHIVED — non-normative.** Task complete: `tasks.my`'s
+> `CP-PLAYER-HANDLE-LIVE` is `done`, live transcript obtained 2026-09-11
+> (see `../vertical-slice.md`). Kept as a record of the procedure, not as
+> an open checklist.
+
 # CP-PLAYER-HANDLE-LIVE — Runbook
 
 **Мета:** отримати один живий transcript у грі, який доводить, що

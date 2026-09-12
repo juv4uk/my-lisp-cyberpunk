@@ -1,3 +1,8 @@
+> **ARCHIVED — non-normative.** Superseded-by: `host-runtime/MIGRATION.md`,
+> `host-runtime/VENDOR.md`. Written before Phase C/D completed; "mirror
+> until Phase D" below is stale — Phase D is done, `wsm-my-lisp/dll` was
+> deleted (their commit `1e1549a`).
+
 # Host runtime migration · 2026-09-11
 
 Per wsm-my-lisp P0 #15: Rust host embed leaves the self-hosting repo.

@@ -1,5 +1,7 @@
 # my-lisp-cyberpunk
 
+Documentation entry point: [`CURRENT.md`](CURRENT.md).
+
 Статус: RED4ext host adapter живе в [`adapter/`](adapter/). Він зібраний
 проти pinned RED4ext SDK, завантажує host-neutral WSM runtime DLL, створює
 Lisp-сесію та виконує один read-only вертикальний зріз через RED4ext log.
