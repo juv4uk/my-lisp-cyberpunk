@@ -142,7 +142,7 @@ REDengine RTTI → symbolic object graph → my-lisp → query/inference/agents.
 Сценарії-фікстури підготовлені в `scripts/`:
 - `сценарій-гравець-клас.мій`
 - `сценарій-позиція.мій`
-- `сценарій-child.мій`
+- `сценарій-нащадок.мій`
 
 Критерій готовності до наступного рівня: live transcript + oracle-перевірка в CLI.
 

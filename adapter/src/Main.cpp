@@ -343,7 +343,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             return false;
         }
 
-        RED4ext::GameState runningState{};
+        RED4ext::v1::GameState runningState{};
         runningState.OnEnter = nullptr;
         runningState.OnUpdate = &DispatchRunningTick;
         runningState.OnExit = nullptr;
@@ -394,16 +394,22 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
     }
 }
 
-RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::PluginInfo* aInfo)
+RED4EXT_C_EXPORT void RED4EXT_CALL Query(RED4ext::v1::PluginInfo* aInfo)
 {
     aInfo->name = L"my-lisp-cyberpunk";
     aInfo->author = L"juv4uk";
-    aInfo->version = RED4EXT_SEMVER(0, 1, 0);
-    aInfo->runtime = RED4EXT_RUNTIME_INDEPENDENT;
-    aInfo->sdk = RED4EXT_SDK_LATEST;
+    aInfo->version = RED4EXT_V1_SEMVER(0, 1, 0);
+    // RUNTIME_VERSION_LATEST, not RUNTIME_VERSION_INDEPENDENT: since
+    // гравець-присутній? started calling RED4ext::ExecuteGlobalFunction
+    // against real game RTTI (GetPlayer;GameInstance, PlayerPuppet), this
+    // adapter is no longer merely a passive logger of the loading
+    // lifecycle -- INDEPENDENT would misrepresent that to RED4ext's own
+    // version-compatibility check.
+    aInfo->runtime = RED4EXT_V1_RUNTIME_VERSION_LATEST;
+    aInfo->sdk = RED4EXT_V1_SDK_VERSION_CURRENT;
 }
 
 RED4EXT_C_EXPORT uint32_t RED4EXT_CALL Supports()
 {
-    return RED4EXT_API_VERSION_LATEST;
+    return RED4EXT_API_VERSION_1;
 }

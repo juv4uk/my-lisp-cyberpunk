@@ -45,7 +45,7 @@ inline bool ResolveAndRead(const std::filesystem::path& preferred, std::string& 
         twin = preferred;
         twin.replace_extension(u8".мій");
     }
-    else if (ext == u8".мій")
+    else if (ext == ".мій")
     {
         twin = preferred;
         twin.replace_extension(".my");
@@ -55,7 +55,7 @@ inline bool ResolveAndRead(const std::filesystem::path& preferred, std::string& 
         twin = preferred;
         twin.replace_extension(u8".всм");
     }
-    else if (ext == u8".всм")
+    else if (ext == ".всм")
     {
         twin = preferred;
         twin.replace_extension(".wsm");
@@ -65,7 +65,7 @@ inline bool ResolveAndRead(const std::filesystem::path& preferred, std::string& 
         twin = preferred;
         twin.replace_extension(u8".лісп");
     }
-    else if (ext == u8".лісп")
+    else if (ext == ".лісп")
     {
         twin = preferred;
         twin.replace_extension(".lisp");
