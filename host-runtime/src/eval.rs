@@ -53,11 +53,9 @@ pub enum EvalError {
     /// A list's head evaluated to something other than a Symbol -- no
     /// value-producing expression is callable in this MVP (no closures).
     NotCallable,
-    /// `cond` reached its end with no truthy test -- real my-lisp's own
-    /// behavior here (error vs. returning Nil) is unconfirmed; treated as
-    /// an explicit error for now rather than silently returning Nil, so
-    /// it's visible instead of masquerading as a valid Nil result.
-    CondFallthrough,
+    /// Спеціальна форма має неправильну структурну арність. Embedded host
+    /// повертає Lisp-помилку до звернення до raw WSM accessors.
+    InvalidForm(String),
     /// A registered host primitive reported failure. Carries the
     /// primitive's name and a host-supplied message, so a host-reported
     /// error surfaces as a real error instead of silently becoming Nil
@@ -135,7 +133,7 @@ fn eval_list(word: u64, env: &Env, symbols: &SymbolTable) -> Result<u64, EvalErr
         // its single argument completely unevaluated. Found missing (not
         // designed in up front) while writing tests/my_lisp_fixture_parity.rs
         // against my-lisp's own §3 example, which uses `(quote ...)` directly.
-        return Ok(unsafe { wsm_car(core::ptr::null_mut(), rest) });
+        return single_argument(rest, "quote");
     }
 
     let args = eval_args(rest, env, symbols)?;
@@ -188,23 +186,53 @@ fn eval_args(mut list: u64, env: &Env, symbols: &SymbolTable) -> Result<Vec<u64>
     Ok(args)
 }
 
+fn single_argument(list: u64, form: &str) -> Result<u64, EvalError> {
+    if tag_of(list) != TAG_CONS {
+        return Err(EvalError::InvalidForm(format!("{form} takes exactly one argument")));
+    }
+    let argument = unsafe { wsm_car(core::ptr::null_mut(), list) };
+    let tail = unsafe { wsm_cdr(core::ptr::null_mut(), list) };
+    if tail != WORD_NIL {
+        return Err(EvalError::InvalidForm(format!("{form} takes exactly one argument")));
+    }
+    Ok(argument)
+}
+
+fn cond_clause(clause: u64) -> Result<(u64, u64), EvalError> {
+    if tag_of(clause) != TAG_CONS {
+        return Err(EvalError::InvalidForm("cond clause takes exactly two forms".to_string()));
+    }
+    let test = unsafe { wsm_car(core::ptr::null_mut(), clause) };
+    let body = unsafe { wsm_cdr(core::ptr::null_mut(), clause) };
+    if tag_of(body) != TAG_CONS {
+        return Err(EvalError::InvalidForm("cond clause takes exactly two forms".to_string()));
+    }
+    let result = unsafe { wsm_car(core::ptr::null_mut(), body) };
+    let tail = unsafe { wsm_cdr(core::ptr::null_mut(), body) };
+    if tail != WORD_NIL {
+        return Err(EvalError::InvalidForm("cond clause takes exactly two forms".to_string()));
+    }
+    Ok((test, result))
+}
+
 /// clauses is the cdr of `(cond (test1 body1) (test2 body2) ...)`: a list
-/// of `(test . body)` conses. First truthy test wins; only its body form
+/// of exactly-two-form clauses. First truthy test wins; only its body form
 /// is evaluated (matches conformance.my: later false clauses are simply
 /// skipped, never evaluated).
 fn eval_cond(mut clauses: u64, env: &Env, symbols: &SymbolTable) -> Result<u64, EvalError> {
     while clauses != WORD_NIL {
+        if tag_of(clauses) != TAG_CONS {
+            return Err(EvalError::InvalidForm("cond expects a list of clauses".to_string()));
+        }
         let clause = unsafe { wsm_car(core::ptr::null_mut(), clauses) };
-        let test = unsafe { wsm_car(core::ptr::null_mut(), clause) };
-        let body = unsafe { wsm_cdr(core::ptr::null_mut(), clause) };
+        let (test, result_expr) = cond_clause(clause)?;
         let test_result = eval(test, env, symbols)?;
         if is_truthy(test_result) {
-            let result_expr = unsafe { wsm_car(core::ptr::null_mut(), body) };
             return eval(result_expr, env, symbols);
         }
         clauses = unsafe { wsm_cdr(core::ptr::null_mut(), clauses) };
     }
-    Err(EvalError::CondFallthrough)
+    Ok(WORD_NIL)
 }
 
 #[cfg(test)]
@@ -436,5 +464,54 @@ mod tests {
         let env = Env::new();
         let word = read_one("(за-умовою (0 1) (t 2))", &mut symbols, &mut strings).unwrap();
         assert_eq!(decode_fixnum(eval(word, &env, &symbols).unwrap()), 1);
+    }
+
+    #[test]
+    fn cond_without_a_truthy_clause_returns_nil() {
+        let mut symbols = SymbolTable::new();
+        let mut strings = BoxedTable::new();
+        let env = Env::new();
+        let word = read_one("(cond (() 1))", &mut symbols, &mut strings).unwrap();
+
+        assert_eq!(eval(word, &env, &symbols), Ok(WORD_NIL));
+    }
+
+    #[test]
+    fn quote_rejects_more_than_one_argument() {
+        let mut symbols = SymbolTable::new();
+        let mut strings = BoxedTable::new();
+        let env = Env::new();
+        let word = read_one("(quote a b)", &mut symbols, &mut strings).unwrap();
+
+        assert_eq!(
+            eval(word, &env, &symbols),
+            Err(EvalError::InvalidForm("quote takes exactly one argument".to_string()))
+        );
+    }
+
+    #[test]
+    fn quote_rejects_no_arguments_without_reaching_raw_accessors() {
+        let mut symbols = SymbolTable::new();
+        let mut strings = BoxedTable::new();
+        let env = Env::new();
+        let word = read_one("(quote)", &mut symbols, &mut strings).unwrap();
+
+        assert_eq!(
+            eval(word, &env, &symbols),
+            Err(EvalError::InvalidForm("quote takes exactly one argument".to_string()))
+        );
+    }
+
+    #[test]
+    fn cond_rejects_a_clause_with_more_than_two_forms() {
+        let mut symbols = SymbolTable::new();
+        let mut strings = BoxedTable::new();
+        let env = Env::new();
+        let word = read_one("(cond (t 1 2))", &mut symbols, &mut strings).unwrap();
+
+        assert_eq!(
+            eval(word, &env, &symbols),
+            Err(EvalError::InvalidForm("cond clause takes exactly two forms".to_string()))
+        );
     }
 }

@@ -238,7 +238,7 @@ fn eval_str(session: &mut Session, text: &str) -> String {
             format!("error: unknown symbol · nevidomyi symvol · unbekanntes Symbol: {name}")
         }
         Err(EvalError::NotCallable) => "error: not callable".to_string(),
-        Err(EvalError::CondFallthrough) => "error: cond: no clause matched".to_string(),
+        Err(EvalError::InvalidForm(message)) => format!("error: invalid form: {message}"),
         Err(EvalError::HostPrimitiveFailed { name, message }) => {
             format!("error: {name} failed: {message}")
         }
@@ -700,6 +700,32 @@ mod tests {
             let result_ptr = wsm_eval_string(session, source.as_ptr());
             let result = CStr::from_ptr(result_ptr).to_str().unwrap().to_string();
             assert_eq!(result, "error: дай-зброю failed: host primitive reported error code 1");
+            wsm_free_string(result_ptr);
+
+            wsm_session_free(session);
+        }
+    }
+
+    #[test]
+    fn malformed_special_forms_return_errors_without_terminating_the_session() {
+        unsafe {
+            let session = wsm_session_init();
+
+            for (source, expected) in [
+                ("(quote)", "error: invalid form: quote takes exactly one argument"),
+                ("(cond (t 1 2))", "error: invalid form: cond clause takes exactly two forms"),
+            ] {
+                let source = CString::new(source).unwrap();
+                let result_ptr = wsm_eval_string(session, source.as_ptr());
+                let result = CStr::from_ptr(result_ptr).to_str().unwrap().to_string();
+                assert_eq!(result, expected);
+                wsm_free_string(result_ptr);
+            }
+
+            let valid_source = CString::new("(quote жива-сесія)").unwrap();
+            let result_ptr = wsm_eval_string(session, valid_source.as_ptr());
+            let result = CStr::from_ptr(result_ptr).to_str().unwrap().to_string();
+            assert_eq!(result, "жива-сесія");
             wsm_free_string(result_ptr);
 
             wsm_session_free(session);
