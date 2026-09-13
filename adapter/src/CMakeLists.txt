@@ -63,6 +63,25 @@ add_executable(
   ../tests/DispatchBenchmark.cpp
 )
 
+add_executable(
+  my-lisp-cyberpunk-local-repl-queue-witness
+  ../tests/LocalReplQueueWitness.cpp
+)
+
+target_include_directories(
+  my-lisp-cyberpunk-local-repl-queue-witness
+  PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+if(MSVC)
+  target_compile_options(my-lisp-cyberpunk-local-repl-queue-witness PRIVATE /utf-8)
+endif()
+
+if(BUILD_TESTING)
+  add_test(NAME local-repl-queue-witness COMMAND my-lisp-cyberpunk-local-repl-queue-witness)
+endif()
+
 target_include_directories(
   my-lisp-cyberpunk-dispatch-benchmark
   PRIVATE

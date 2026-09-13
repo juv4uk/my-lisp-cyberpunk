@@ -24,28 +24,28 @@
 
 **Files:**
 - Create: `adapter/src/LocalReplQueue.hpp`
-- Create: `adapter/tests/LocalReplQueueTest.cpp`
+- Create: `adapter/tests/LocalReplQueueWitness.cpp`
 - Modify: `adapter/src/CMakeLists.txt`
 
 **Interfaces:**
 - Produces `local_repl::RequestQueue`, with `bool Push(std::string, Reply)`, `std::optional<Request> Pop()`, `constexpr kMaxRequestBytes = 16384`, and `constexpr kMaxPendingRequests = 32`.
 - `Reply` receives exactly one UTF-8 response string from the game thread.
 
-- [ ] **Step 1: Write failing FIFO/bound tests**
+- [x] **Step 1: Write a failing FIFO/bound CTest witness**
 
 ```cpp
-TEST(LocalReplQueue, RejectsOversizeAndFullQueue) {
+int main() {
   local_repl::RequestQueue queue;
-  EXPECT_FALSE(queue.Push(std::string(local_repl::kMaxRequestBytes + 1, 'x'), reply));
-  for (size_t i = 0; i < local_repl::kMaxPendingRequests; ++i) EXPECT_TRUE(queue.Push("()", reply));
-  EXPECT_FALSE(queue.Push("()", reply));
+  if (queue.Push(std::string(local_repl::kMaxRequestBytes + 1, 'x'), reply)) return 1;
+  for (size_t i = 0; i < local_repl::kMaxPendingRequests; ++i) if (!queue.Push("()", reply)) return 2;
+  return queue.Push("()", reply) ? 3 : 0;
 }
 ```
 
-- [ ] **Step 2: Run the queue test and confirm it fails because the queue is absent.**
-- [ ] **Step 3: Implement the mutex-protected FIFO.** `Push` copies the request and reply closure; `Pop` moves the oldest request. It performs no socket or WSM work.
-- [ ] **Step 4: Run CTest and confirm queue tests pass.**
-- [ ] **Step 5: Commit** `test(adapter): cover bounded local REPL queue`.
+- [x] **Step 2: Run the CTest witness and confirm it fails because the queue is absent.**
+- [x] **Step 3: Implement the mutex-protected FIFO.** `Push` copies the request and reply closure; `Pop` moves the oldest request. It performs no socket or WSM work.
+- [x] **Step 4: Run CTest and confirm queue tests pass.**
+- [x] **Step 5: Commit** `test(adapter): cover bounded local REPL queue`.
 
 ### Task 2: Loopback listener and game-thread drain
 
