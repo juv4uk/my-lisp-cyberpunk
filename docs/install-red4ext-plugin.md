@@ -14,8 +14,8 @@ RED4ext і сама гра встановлені один раз (`red4ext/RED4
 
 1. `my-lisp-cyberpunk-plugin.dll` (з `adapter/build/src/Release/`)
 2. `wsm_my_lisp_cyberpunk_dll.dll` — **тепер з `host-runtime/target/x86_64-pc-windows-msvc/{debug,release}/`**, не з сусіднього `wsm-my-lisp` checkout (host-runtime мігрував сюди 2026-09-11, `wsm-my-lisp#15` Phase C; див. `host-runtime/MIGRATION.md`)
-3. **`scripts/` — уся папка**, не лише окремий файл (з `my-lisp-cyberpunk/scripts/*.мій`)
-   — забутий крок реально викликав `could not load scripts/диспетчер.мій`
+3. **`scripts/` — уся папка**, не лише окремий файл (з `my-lisp-cyberpunk/scripts/*.lisp`)
+   — забутий крок реально викликав `could not load scripts/dispatcher.lisp`
    у живому лозі (2026-09-11), не гіпотетичний ризик.
 
 ```bash
@@ -23,7 +23,7 @@ PLUGDIR="<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin"
 cp adapter/build/src/Release/my-lisp-cyberpunk-plugin.dll "$PLUGDIR/"
 cp host-runtime/target/x86_64-pc-windows-msvc/debug/wsm_my_lisp_cyberpunk_dll.dll "$PLUGDIR/"
 mkdir -p "$PLUGDIR/scripts"
-cp scripts/*.мій "$PLUGDIR/scripts/"
+cp scripts/*.lisp "$PLUGDIR/scripts/"
 ```
 
 DLL-файли, зайняті поточним процесом гри, неможливо перезаписати — гру

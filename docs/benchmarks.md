@@ -8,7 +8,7 @@
 шлях, якого немає в тих репозиторіях:
 
 ```text
-RED4ext Running tick → fixed `.my` dispatch → host capability → результат
+RED4ext Running tick → fixed `.lisp` dispatch → host capability → результат
 ```
 
 Числа не є критерієм семантичної правильності і не мають бути CI gate.
@@ -40,7 +40,7 @@ RED4ext Running tick → fixed `.my` dispatch → host capability → резул
 | `dispatch-fact-true-noop` | `cond` з істинною noop-гілкою | `t` | capability call + істинна гілка без дії |
 | `dispatch-fact-true-log` | `cond` → `запиши-лог` | `t` | повний Lisp → host primitive dispatch, без фізичного log I/O |
 
-Сценарії є `.my` файлами, а не C++ рядками. Це зберігає критерій: зміна
+Сценарії є `.lisp` файлами, а не C++ рядками. Це зберігає критерій: зміна
 сценарію змінює поведінку без перекомпіляції adapter.
 
 ## Метод вимірювання
@@ -81,7 +81,7 @@ Cyberpunk реальний `Running` tick. Тоді збирати тривал�
 - не бенчмаркаємо RTTI, логування на диск чи GPU разом із Lisp dispatch;
 - не додаємо telemetry framework, profiler UI або callback registry;
 - не оптимізуємо reader/evaluator у C++: це зона `wsm-my-lisp`;
-- не змінюємо `.my` семантику заради числа.
+- не змінюємо Lisp семантику заради числа.
 
 Перший крок — `adapter harness v0`. Він має бути виконуваним, але
 діагностичним: regression у коректності ламає witness, коливання часу лише

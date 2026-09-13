@@ -144,7 +144,7 @@ int main(int argc, char** argv)
     }
     if (argc != 4)
     {
-        std::cerr << "usage: dispatch-witness <wsm-dll> <log-scenario.мій> <silent-scenario.мій>\n";
+        std::cerr << "usage: dispatch-witness <wsm-dll> <log-scenario.lisp> <silent-scenario.lisp>\n";
         return 2;
     }
 
@@ -163,6 +163,6 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    std::cout << "fixed-dispatch witness: same host fact; `.my` chose 1 then 0 log calls\n";
+    std::cout << "fixed-dispatch witness: same host fact; `.lisp` chose 1 then 0 log calls\n";
     return 0;
 }

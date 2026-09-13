@@ -3,9 +3,9 @@
 **Owner 2026-09-10** — equal spellings only:
 
 ```text
-.my   ↔ .мій
-.wsm  ↔ .всм
-.lisp ↔ .лісп
+.lisp — canonical; .my ↔ .мій are compatibility aliases
+.wsm ↔ .всм remain protocol/compatibility forms
+.лісп is a compatibility alias
 ```
 
 No new semantics, no mass rename.
@@ -14,8 +14,8 @@ No new semantics, no mass rename.
 
 | Area | Status |
 |------|--------|
-| Product scripts under `scripts/` | Already use `.мій` (диспетчер, сценарії) |
-| `LoadDispatchSource` | Tries `диспетчер.мій`, then `.my` twins |
+| Product scripts under `scripts/` | Use canonical `.lisp` names |
+| `LoadDispatchSource` | Tries `dispatcher.lisp` first, then compatibility aliases |
 | `SurfaceExt.hpp` | Resolve/read helper for twin extensions |
 | DispatchWitness / Benchmarks | Paths passed as argv — any extension works if file exists |
 | WSM DLL / RED4ext | **not-applicable** — no `.my` filters |
@@ -23,8 +23,8 @@ No new semantics, no mass rename.
 
 ## Fixtures
 
-- `scripts/диспетчер.мій` — primary (Cyrillic)
-- Latin twin optional: `диспетчер.my` if present is also accepted
+- `scripts/dispatcher.lisp` — primary (Cyrillic)
+- Latin twin optional: `dispatcher.lisp` if present is also accepted
 
 ## Related
 

@@ -233,11 +233,11 @@ int main(int argc, char** argv)
 
     const std::filesystem::path scriptsDirectory(argv[2]);
     const std::vector<BenchmarkCase> cases = {
-        {"dispatch-empty", scriptsDirectory / u8"бенчмарк-диспетчер-порожньо.мій", false, 0},
-        {"dispatch-fact-false", scriptsDirectory / u8"бенчмарк-диспетчер-гравець-відсутній.мій", false, 0},
-        {"dispatch-fact-true-noop", scriptsDirectory / u8"бенчмарк-диспетчер-гравець-присутній-тиша.мій", true,
+        {"dispatch-empty", scriptsDirectory / "benchmark-dispatch-empty.lisp", false, 0},
+        {"dispatch-fact-false", scriptsDirectory / "benchmark-dispatch-player-absent.lisp", false, 0},
+        {"dispatch-fact-true-noop", scriptsDirectory / "benchmark-dispatch-player-present-silent.lisp", true,
          0},
-        {"dispatch-fact-true-log", scriptsDirectory / u8"бенчмарк-диспетчер-гравець-присутній-лог.мій", true, 1},
+        {"dispatch-fact-true-log", scriptsDirectory / "benchmark-dispatch-player-present-log.lisp", true, 1},
     };
 
     std::cout << "BENCH_CONTEXT\twarmup=" << kWarmupIterations << "\tseries=" << kSeriesCount

@@ -86,17 +86,19 @@ inline bool ResolveAndRead(const std::filesystem::path& preferred, std::string& 
     return false;
 }
 
-// Dispatch loader candidates: Cyrillic first (current product spelling), then Latin twin.
+// `.lisp` is the canonical source extension. Legacy spellings remain only
+// as compatibility fallbacks for already-installed plugin directories.
 inline std::vector<std::filesystem::path> DispatchCandidates(const std::filesystem::path& scriptsDir)
 {
     return {
+        scriptsDir / "dispatcher.lisp",
+        scriptsDir / u8"диспетчер.лісп",
         scriptsDir / u8"диспетчер.мій",
         scriptsDir / u8"диспетчер.my",
         scriptsDir / "dispatcher.my",
         scriptsDir / u8"dispatcher.мій",
     };
 }
-
 inline bool LoadFirstExisting(const std::vector<std::filesystem::path>& candidates, std::string& out,
                               std::filesystem::path* usedPath = nullptr)
 {

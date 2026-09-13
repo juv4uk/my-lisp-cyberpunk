@@ -2,7 +2,7 @@
 //
 // Purpose of THIS pass: prove wsm_my_lisp_cyberpunk_dll.dll loads inside the
 // game process and host primitives work. RTTI/mutating capabilities later.
-// Surface extensions (owner 2026-09-10): .my ↔ .мій for dispatch load.
+// `.lisp` is canonical; legacy extensions are compatibility-only for dispatch load.
 
 #include <RED4ext/RED4ext.hpp>
 #include <RED4ext/Scripting/Natives/ScriptGameInstance.hpp>
@@ -357,7 +357,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         if (!LoadDispatchSource(g_dispatchSource))
         {
             logger->ErrorF(aHandle,
-                            "my-lisp-cyberpunk: could not load scripts/диспетчер.мій (or .my twin)");
+                            "my-lisp-cyberpunk: could not load canonical scripts/dispatcher.lisp (or compatibility alias)");
             return false;
         }
 
