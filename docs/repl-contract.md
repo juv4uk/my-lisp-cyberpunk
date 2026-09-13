@@ -2,10 +2,11 @@
 
 ## Goal
 
-Expose the Cyberpunk host session through an interactive, local-only REPL.
-The REPL is a presentation and transport surface; `my-lisp` remains the owner
-of source semantics, while RED4ext and C++ provide capabilities and scheduling
-only.
+Expose the Cyberpunk host session through an interactive REPL. NeuralDeck,
+the in-game ink overlay opened by a hotkey, is the primary product surface;
+see [NeuralDeck](neuraldeck-repl.md). The loopback protocol below is an
+optional development transport. `my-lisp` remains the owner of source
+semantics, while RED4ext and C++ provide capabilities and scheduling only.
 
 ## Current semantic boundary
 
@@ -20,7 +21,7 @@ an equivalently proven embedding surface supplied by `my-lisp`) rather than
 adding ad-hoc definitions to this evaluator. No UI or transport code may claim
 that semantic authority.
 
-## Scope of the first slice
+## Optional loopback development transport
 
 - Bind only `127.0.0.1:40777`; never a LAN interface.
 - Accept one UTF-8 Lisp form per newline-delimited request.

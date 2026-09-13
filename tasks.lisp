@@ -89,6 +89,14 @@
      (evidence . ("docs/repl-contract.md" "docs/superpowers/plans/2026-09-13-local-repl.md"))
      (description . "Локальний interactive REPL до єдиної host Lisp-сесії: loopback transport кладе рядок у bounded queue, а Running tick обчислює його в game thread.")
      (acceptance . "Два вирази в одному локальному з'єднанні ділять session state; malformed форма повертає error і наступний валідний вираз працює; live transcript підтверджує listener і result.")))
+   ("CP-NEURALDECK-INGAME-REPL" .
+    ((priority . 9.3)
+     (done . nil)
+     (depends-on . ("CP-CANONICAL-REPL-SESSION"))
+     (capabilities . (ink-ui hotkey in-process-repl transcript))
+     (evidence . ("docs/neuraldeck-repl.md"))
+     (description . "Створити NeuralDeck — внутрішньоігровий Cyberpunk-styled REPL: hotkey відкриває ink overlay; UI кладе UTF-8 форму у локальну queue; Running tick виконує її в єдиній canonical session і повертає результат у transcript. TCP не є основним шляхом.")
+     (acceptance . "У грі hotkey відкриває NeuralDeck; (визначити x 42) і x ділять одну session; (клас гравець) показує результат; malformed форма не закриває UI і не ламає наступну команду; live screenshot/log witness є.")))
    ("CP-CANONICAL-REPL-SESSION" .
    ((priority . 9.4)
      (done . nil)
