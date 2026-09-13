@@ -32,4 +32,9 @@ endif()
 set(RED4EXT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(deps/red4ext.sdk)
 
+include(CTest)
+if(BUILD_TESTING)
+  add_test(NAME host-operations-registry-mutation COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsRegistryTest.cmake)
+endif()
+
 add_subdirectory(src)
