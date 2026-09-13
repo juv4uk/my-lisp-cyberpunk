@@ -94,8 +94,8 @@
      (done . nil)
      (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
      (capabilities . (my-lisp canonical-session embedding semantic-parity))
-     (evidence . ("docs/canonical-embed-adoption.md" "my-lisp@1ec1843c crates/my-lisp-embed"))
-     (description . "Замінити fixed-dispatch evaluator host-runtime на canonical my-lisp session або на доведену embedding-boundary, яку володіє my-lisp. Upstream phase A готова: my-lisp-embed вже доводить persistent define/closure через C ABI. Наступна межа — typed host-capability bridge; не додавати локальну реалізацію def/let/closures у Cyberpunk repo.")
+     (evidence . ("docs/canonical-embed-adoption.md" "my-lisp@178c80bb crates/my-lisp-embed"))
+     (description . "Замінити fixed-dispatch evaluator host-runtime на canonical my-lisp session або на доведену embedding-boundary, яку володіє my-lisp. Upstream phase A/B готові: my-lisp-embed доводить persistent define/closure і nullary host mechanisms через C ABI. Наступна межа — typed opaque GameHandle bridge для (клас ...); не додавати локальну реалізацію def/let/closures у Cyberpunk repo.")
      (acceptance . "Через один REPL session `(визначити repl-перевірка 42)` і наступний `repl-перевірка` повертають 42; canonical my-lisp conformance fixture підтверджує semantic parity; adapter не містить другого evaluator.")))
    ("CP-BOXED-LIFETIME" .
     ((priority . 9.1)
