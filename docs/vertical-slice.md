@@ -2,9 +2,10 @@
 
 ## Статус
 
-`(запиши-лог)` живим запуском у грі підтверджено тричі (2026-09-10,
-RED4ext v1.30.0, Cyberpunk 2077 v2.31) — transcript в закритому issue
-`my-lisp-cyberpunk#1`.
+`(запиши-лог)` живим запуском у грі підтверджено 2026-09-10 (RED4ext
+v1.30.0, Cyberpunk 2077 v2.31). Незмінна копія перевіреного фрагмента логу
+живе в [`docs/evidence/CP-IN-GAME-LOAD-WITNESS-2026-09-10.md`](evidence/CP-IN-GAME-LOAD-WITNESS-2026-09-10.md);
+закритий issue `my-lisp-cyberpunk#1` лишається його зовнішнім джерелом.
 
 `(гравець-присутній?)` — друга, теж read-only capability, зібрана.
 **Наступний обов'язковий крок:** live transcript opaque player handle
