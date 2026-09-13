@@ -72,5 +72,24 @@ int main()
         std::cerr << "loopback request/response proof failed\n";
         return 3;
     }
+
+    if (!server.Start(queue, kTestPort))
+    {
+        std::cerr << "could not restart loopback server\n";
+        return 4;
+    }
+    std::string cancelled;
+    if (!queue.Push("pending-at-unload", [&cancelled](std::string result) { cancelled = std::move(result); }))
+    {
+        server.Stop();
+        std::cerr << "could not enqueue pending request\n";
+        return 5;
+    }
+    server.Stop();
+    if (queue.Pending() != 0 || cancelled != "error: REPL session ended")
+    {
+        std::cerr << "Stop left a request alive past the REPL session\n";
+        return 6;
+    }
     return 0;
 }

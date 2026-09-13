@@ -60,6 +60,24 @@ public:
         return m_requests.size();
     }
 
+    [[nodiscard]] std::size_t CancelAll(std::string result)
+    {
+        std::queue<Request> cancelled;
+        {
+            std::lock_guard lock(m_mutex);
+            cancelled.swap(m_requests);
+        }
+
+        const std::size_t count = cancelled.size();
+        while (!cancelled.empty())
+        {
+            Request request = std::move(cancelled.front());
+            cancelled.pop();
+            request.reply(result);
+        }
+        return count;
+    }
+
 private:
     mutable std::mutex m_mutex;
     std::queue<Request> m_requests;

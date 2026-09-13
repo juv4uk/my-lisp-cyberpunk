@@ -166,6 +166,10 @@ void LocalReplServer::Stop()
     {
         m_impl->worker.join();
     }
+    if (m_impl->queue != nullptr)
+    {
+        (void)m_impl->queue->CancelAll("error: REPL session ended");
+    }
     m_impl->queue = nullptr;
     if (m_impl->winsockReady)
     {

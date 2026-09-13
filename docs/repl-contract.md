@@ -35,6 +35,18 @@ that semantic authority.
 - Limit a request to 16 KiB and queue at most 32 pending requests. Reject a
   larger request or a full queue with a textual error; do not drop it silently.
 
+## Unload policy
+
+`Unload` stops the listener before freeing the Lisp session. After the socket
+worker has joined, the adapter removes every still-pending request from the
+queue and completes its reply with `error: REPL session ended`. The queue is
+therefore empty before `wsm_session_free`; no source accepted by an old plugin
+lifetime can be evaluated after a later reload.
+
+An in-flight evaluation is already on the RED4ext game thread and completes
+before `Unload` continues. The listener never evaluates Lisp, so no worker can
+hold a session pointer while the session is freed.
+
 ## Why this is not the CLI TCP server copied into the game
 
 `my-lisp-cli/src/tcp_repl.rs` is the behavioural precedent: loopback-only,
@@ -75,3 +87,5 @@ session usable. Networking errors close only that client connection.
    state persists across them.
 3. A live game transcript records the listener address, a successful result,
    and a malformed request whose later valid request still succeeds.
+4. The native server witness proves that `Stop()` cancels a pending request and
+   leaves the queue empty with `error: REPL session ended`.
