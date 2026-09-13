@@ -30,7 +30,8 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 
-const REGISTRY_PATH: &str = "external/my-lisp/lib/surface/semantic-registry.wsm";
+const REGISTRY_PATH_LISP: &str = "external/my-lisp/lib/surface/semantic-registry.lisp";
+const REGISTRY_PATH_WSM: &str = "external/my-lisp/lib/surface/semantic-registry.wsm";
 
 /// Minimal untyped S-expression -- just enough to walk
 /// `semantic-registry.wsm`'s own shape (a big list of `(id (lang word
@@ -154,11 +155,16 @@ fn emit_entry(out: &mut String, const_name: &str, root: &Sexpr, id: &str) {
 }
 
 fn main() {
-    println!("cargo:rerun-if-changed={REGISTRY_PATH}");
+    let registry_path = if Path::new(REGISTRY_PATH_LISP).exists() {
+        REGISTRY_PATH_LISP
+    } else {
+        REGISTRY_PATH_WSM
+    };
+    println!("cargo:rerun-if-changed={registry_path}");
     println!("cargo:rerun-if-changed=build.rs");
 
-    let source = fs::read_to_string(REGISTRY_PATH).unwrap_or_else(|e| {
-        panic!("failed to read {REGISTRY_PATH} (is the external/my-lisp submodule initialized? `git submodule update --init`): {e}")
+    let source = fs::read_to_string(registry_path).unwrap_or_else(|e| {
+        panic!("failed to read {registry_path} (is the external/my-lisp submodule initialized? `git submodule update --init`): {e}")
     });
     let tokens = tokenize(&source);
     let mut pos = 0;
