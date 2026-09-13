@@ -17,6 +17,7 @@ listed below, this file and the docs it points to win; anything in
 - [`docs/benchmarks.md`](docs/benchmarks.md) — fixed-dispatch performance evidence.
 - [`docs/surface-extensions.md`](docs/surface-extensions.md) — `.my`/`.мій` equal-surface loading.
 - [`docs/deep-penetration-roadmap-2026-09-10.md`](docs/deep-penetration-roadmap-2026-09-10.md) — owner's roadmap analysis; its own "Статус після трьох фіксів" table is kept current, task ladder now lives in `tasks.my`.
+- [`docs/repl-contract.md`](docs/repl-contract.md) — active contract for the first local interactive REPL transport.
 
 ## Tasks
 

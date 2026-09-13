@@ -81,6 +81,14 @@
      (capabilities . (rtti read-only))
      (description . "Перша read-only властивість через opaque handle: (клас гравець) → PlayerPuppet (або точне ім'я з RTTI). C++ тільки виконує GetClassName / аналог, Lisp бачить рядок/символ.")
      (acceptance . "Сценарій повертає очікуване ім'я класу; live transcript є.")))
+   ("CP-LOCAL-REPL-V0" .
+    ((priority . 9.2)
+     (done . nil)
+     (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
+     (capabilities . (repl loopback persistent-session game-thread))
+     (evidence . ("docs/repl-contract.md" "docs/superpowers/plans/2026-09-13-local-repl.md"))
+     (description . "Локальний interactive REPL до єдиної host Lisp-сесії: loopback transport кладе рядок у bounded queue, а Running tick обчислює його в game thread.")
+     (acceptance . "Два вирази в одному локальному з'єднанні ділять session state; malformed форма повертає error і наступний валідний вираз працює; live transcript підтверджує listener і result.")))
    ("CP-BOXED-LIFETIME" .
     ((priority . 9.1)
      (done . t)
