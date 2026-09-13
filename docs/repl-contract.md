@@ -2,10 +2,23 @@
 
 ## Goal
 
-Expose one persistent `my-lisp` session already owned by the Cyberpunk host
-as an interactive, local-only REPL. The REPL is a presentation and transport
-surface; `my-lisp` remains the owner of source semantics, while RED4ext and
-C++ provide capabilities and scheduling only.
+Expose the Cyberpunk host session through an interactive, local-only REPL.
+The REPL is a presentation and transport surface; `my-lisp` remains the owner
+of source semantics, while RED4ext and C++ provide capabilities and scheduling
+only.
+
+## Current semantic boundary
+
+The current `host-runtime` is deliberately a fixed-dispatch evaluator. It has
+`quote`, `cond`, host bindings and registered host primitives, but no Lisp
+`def`/`визначити`, `let` or closures. The loopback transport therefore supports
+interactive evaluation of the admitted host surface today, but it cannot yet
+truthfully promise user-defined state across requests.
+
+The full REPL milestone depends on adopting a canonical `my-lisp` session (or
+an equivalently proven embedding surface supplied by `my-lisp`) rather than
+adding ad-hoc definitions to this evaluator. No UI or transport code may claim
+that semantic authority.
 
 ## Scope of the first slice
 
@@ -13,8 +26,9 @@ C++ provide capabilities and scheduling only.
 - Accept one UTF-8 Lisp form per newline-delimited request.
 - Return one newline-delimited UTF-8 result. The result is exactly the text
   returned by `wsm_eval_string`, including its existing `error:` rendering.
-- Keep one session for the installed plugin lifetime. A `define` made through
-  the REPL remains visible to later REPL requests and to `dispatcher.lisp`.
+- Keep one host session for the installed plugin lifetime. Once its evaluator
+  becomes canonical, a `define` made through the REPL must remain visible to
+  later REPL requests and to `dispatcher.lisp`.
 - Evaluate only from the RED4ext `Running` update callback. The socket thread
   may receive bytes and enqueue requests, but it must never call the WSM ABI.
 - Limit a request to 16 KiB and queue at most 32 pending requests. Reject a

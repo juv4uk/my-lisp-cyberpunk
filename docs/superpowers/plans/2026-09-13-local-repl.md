@@ -66,7 +66,7 @@ int main() {
 - [x] **Step 5: Link `ws2_32`, build Release adapter, run CTest and the witness.**
 - [x] **Step 6: Commit** `feat(adapter): add game-thread local REPL transport`.
 
-### Task 3: Persistent-session proof and operator runbook
+### Task 3: Persistent-session proof and operator runbook (after CP-CANONICAL-REPL-SESSION)
 
 **Files:**
 - Create: `adapter/tests/LocalReplWitness.cpp`
@@ -80,7 +80,7 @@ int main() {
 
 - [ ] **Step 1: Write the witness expectation.** Send `(визначити repl-перевірка 42)` then `repl-перевірка`; expect `42` on the second reply. Send malformed input then `repl-перевірка` again; expect an error then `42`.
 - [ ] **Step 2: Run it and confirm it fails until Task 2 is integrated.**
-- [ ] **Step 3: Implement only enough fixture capability/bootstrap to make the proof pass.** Do not add a second session.
+- [ ] **Step 3: Use the canonical session supplied by `my-lisp`; do not add a local `def` implementation or a second session.**
 - [ ] **Step 4: Add a runbook.** State listener address, sample PowerShell client, expected log lines, and that live evidence is required before marking the task done.
 - [ ] **Step 5: Run full Rust tests with `--test-threads=1`, CTest, Release build, queue/listener witness, and dispatch witness.**
 - [ ] **Step 6: Commit** `test(adapter): prove persistent local REPL session`.
