@@ -90,11 +90,12 @@
      (description . "Локальний interactive REPL до єдиної host Lisp-сесії: loopback transport кладе рядок у bounded queue, а Running tick обчислює його в game thread.")
      (acceptance . "Два вирази в одному локальному з'єднанні ділять session state; malformed форма повертає error і наступний валідний вираз працює; live transcript підтверджує listener і result.")))
    ("CP-CANONICAL-REPL-SESSION" .
-    ((priority . 9.4)
+   ((priority . 9.4)
      (done . nil)
      (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
      (capabilities . (my-lisp canonical-session embedding semantic-parity))
-     (description . "Замінити fixed-dispatch evaluator host-runtime на canonical my-lisp session або на доведену embedding-boundary, яку володіє my-lisp. Не додавати локальну реалізацію def/let/closures у Cyberpunk repo.")
+     (evidence . ("docs/canonical-embed-adoption.md" "my-lisp@1ec1843c crates/my-lisp-embed"))
+     (description . "Замінити fixed-dispatch evaluator host-runtime на canonical my-lisp session або на доведену embedding-boundary, яку володіє my-lisp. Upstream phase A готова: my-lisp-embed вже доводить persistent define/closure через C ABI. Наступна межа — typed host-capability bridge; не додавати локальну реалізацію def/let/closures у Cyberpunk repo.")
      (acceptance . "Через один REPL session `(визначити repl-перевірка 42)` і наступний `repl-перевірка` повертають 42; canonical my-lisp conformance fixture підтверджує semantic parity; adapter не містить другого evaluator.")))
    ("CP-BOXED-LIFETIME" .
     ((priority . 9.1)
