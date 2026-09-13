@@ -39,11 +39,16 @@ wherever this repo consumes Canon forms.
   question, not a semantic-authority question — tracked in the
   deep-penetration roadmap, not here.
 
-## Not done in this pass
+## Guard against new evaluator drift
 
-A CI-enforced "unknown ID fails closed" test specific to this table (the
-acceptance criterion's "parity/mutation tests catch drift") — the existing
-`host-runtime/build.rs` already fails closed for `quote`/`cond` at build
-time; a repo-wide lint that would catch a *new* hardcoded Canon spelling
-being added in the future is not implemented here. Left as a follow-up,
-not silently skipped.
+`adapter/cmake/CheckCanonSpellings.cmake` now checks the only local evaluator
+consumer, `host-runtime/src/eval.rs`. It rejects direct `name == "..."` or
+`name != "..."` dispatch over every current `quote`/`cond` Canon surface.
+`adapter/tests/CanonSpellingGuardTest.cmake` mutation-tests the guard with a
+poisoned `name == "quote"` source and proves that generated
+`QUOTE_SPELLINGS` remains accepted.
+
+This is deliberately not claimed as a repository-wide language linter:
+oracle text, documentation and external/my-lisp source are not scanned. A
+future Canon form consumed by this host runtime must extend both `build.rs`
+and this guard's surface list in the same review.
