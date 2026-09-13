@@ -48,6 +48,15 @@ use crate::printer::value_to_string;
 use crate::reader::{self, ReadError};
 use crate::word::{BoxedTable, SymbolTable};
 
+pub const HOST_ABI_VERSION: u32 = 1;
+pub const HOST_FEATURE_CANONICAL_WORDS: u64 = 1 << 0;
+pub const HOST_FEATURE_GAME_HANDLE: u64 = 1 << 1;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wsm_host_abi_version() -> u32 { HOST_ABI_VERSION }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn wsm_host_feature_bits() -> u64 { HOST_FEATURE_CANONICAL_WORDS | HOST_FEATURE_GAME_HANDLE }
 /// Повертає єдине ABI-представлення порожнього списку, щоб host не дублював
 /// Word encoding поза runtime.
 #[unsafe(no_mangle)]
@@ -829,6 +838,8 @@ mod tests {
     }
     #[test]
     fn host_word_exports_preserve_canonical_lisp_identity() {
+        assert_eq!(wsm_host_abi_version(), HOST_ABI_VERSION);
+        assert_eq!(wsm_host_feature_bits() & HOST_FEATURE_GAME_HANDLE, HOST_FEATURE_GAME_HANDLE);
         assert_eq!(wsm_word_nil(), crate::word::WORD_NIL);
         assert_eq!(wsm_word_true(), crate::word::SYM_T_WORD);
     }

@@ -35,6 +35,11 @@ using WsmEvalStringFn = char* (*)(Session*, const char*);
 using WsmFreeStringFn = void (*)(char*);
 using WsmWrapGameHandleFn = int32_t (*)(Session*, void*, uint64_t*);
 using WsmWordFn = uint64_t (*)();
+using WsmAbiVersionFn = uint32_t (*)();
+using WsmFeatureBitsFn = uint64_t (*)();
+
+constexpr uint32_t kExpectedHostAbiVersion = 1;
+constexpr uint64_t kRequiredHostFeatures = (1ull << 0) | (1ull << 1);
 
 HMODULE g_wsmModule = nullptr;
 Session* g_wsmSession = nullptr;
@@ -286,6 +291,14 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         }
         guard.SetModule(wsmModule);
 
+        auto abiVersion = reinterpret_cast<WsmAbiVersionFn>(GetProcAddress(wsmModule, "wsm_host_abi_version"));
+        auto featureBits = reinterpret_cast<WsmFeatureBitsFn>(GetProcAddress(wsmModule, "wsm_host_feature_bits"));
+        if (abiVersion == nullptr || featureBits == nullptr || abiVersion() != kExpectedHostAbiVersion ||
+            (featureBits() & kRequiredHostFeatures) != kRequiredHostFeatures)
+        {
+            logger->ErrorF(aHandle, "my-lisp-cyberpunk: incompatible WSM host ABI");
+            return false;
+        }
         auto sessionInit =
             reinterpret_cast<WsmSessionInitFn>(GetProcAddress(wsmModule, "wsm_session_init"));
         if (sessionInit == nullptr)
