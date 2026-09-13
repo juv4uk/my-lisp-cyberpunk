@@ -11,6 +11,7 @@ target_include_directories(
   my-lisp-cyberpunk-plugin
   PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_BINARY_DIR}/.."
 )
 
 target_link_libraries(
@@ -50,6 +51,7 @@ target_include_directories(
   my-lisp-cyberpunk-dispatch-witness
   PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_BINARY_DIR}/.."
 )
 
 if(MSVC)
@@ -59,6 +61,13 @@ endif()
 add_executable(
   my-lisp-cyberpunk-dispatch-benchmark
   ../tests/DispatchBenchmark.cpp
+)
+
+target_include_directories(
+  my-lisp-cyberpunk-dispatch-benchmark
+  PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_BINARY_DIR}/.."
 )
 
 if(MSVC)

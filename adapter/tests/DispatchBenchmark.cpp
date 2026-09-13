@@ -4,6 +4,8 @@
 
 #include <windows.h>
 
+#include "generated/host_operations.generated.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -135,8 +137,8 @@ bool RunCase(const WsmApi& api, const BenchmarkCase& benchmark)
     }
 
     Session* session = api.sessionInit();
-    if (session == nullptr || api.registerPrimitive(session, "запиши-лог", &LogPrimitive) != 0 ||
-        api.registerPrimitive(session, "гравець-присутній?", &PlayerPresentPrimitive) != 0)
+    if (session == nullptr || api.registerPrimitive(session, host_operations::OP_CP_0001.surface, &LogPrimitive) != 0 ||
+        api.registerPrimitive(session, host_operations::OP_CP_0002.surface, &PlayerPresentPrimitive) != 0)
     {
         if (session != nullptr)
         {

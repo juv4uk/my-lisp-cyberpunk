@@ -9,6 +9,8 @@
 
 #include <windows.h>
 
+#include "generated/host_operations.generated.hpp"
+
 #include "GameHandleTable.hpp"
 #include "PlayerHandleEpoch.hpp"
 #include "SurfaceExt.hpp"
@@ -319,13 +321,13 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             return false;
         }
 
-        if (registerPrimitive(session, "запиши-лог", &LogPrimitive) != 0)
+        if (registerPrimitive(session, host_operations::OP_CP_0001.surface, &LogPrimitive) != 0)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not register запиши-лог");
             return false;
         }
 
-        if (registerPrimitive(session, "гравець-присутній?", &PlayerPresentPrimitive) != 0)
+        if (registerPrimitive(session, host_operations::OP_CP_0002.surface, &PlayerPresentPrimitive) != 0)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not register гравець-присутній?");
             return false;

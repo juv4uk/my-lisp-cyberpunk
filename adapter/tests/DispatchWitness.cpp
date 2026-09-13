@@ -4,6 +4,8 @@
 
 #include <windows.h>
 
+#include "generated/host_operations.generated.hpp"
+
 #include "PlayerHandleEpoch.hpp"
 
 #include <cstddef>
@@ -94,8 +96,8 @@ bool RunScenario(HMODULE module, const std::filesystem::path& scenario, int expe
         return false;
     }
 
-    const bool registered = registerPrimitive(session, "запиши-лог", &LogPrimitive) == 0 &&
-                            registerPrimitive(session, "гравець-присутній?", &PlayerPresentPrimitive) == 0;
+    const bool registered = registerPrimitive(session, host_operations::OP_CP_0001.surface, &LogPrimitive) == 0 &&
+                            registerPrimitive(session, host_operations::OP_CP_0002.surface, &PlayerPresentPrimitive) == 0;
     if (!registered)
     {
         sessionFree(session);
