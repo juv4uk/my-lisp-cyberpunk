@@ -49,6 +49,12 @@ C++ реалізує ці callbacks, тримає `GameHandleTable` і не ін
 результат як policy. CML визначає порядок і умови capability calls через
 скомпільований `.lisp` artifact.
 
+Перший consumer-side transport у `adapter/src/CmlAotDispatch.hpp` навмисно
+відкриває лише `cp:0001` і `cp:0002`: це достатньо для доказу AOT
+інверсії керування без передачі Lisp values через C ABI. `cp:0003` увійде
+лише разом із окремим typed opaque-handle протоколом CML; adapter не
+підміняє його raw token або C++-рядком.
+
 ## Обов'язкові властивості v0
 
 - Artifact не містить `main`, `exit`, глобального interpreter state або
