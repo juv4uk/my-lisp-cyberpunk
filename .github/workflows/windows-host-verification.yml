@@ -1,0 +1,41 @@
+name: Windows host verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Test host runtime
+        working-directory: host-runtime
+        run: cargo test
+
+      - name: Build release runtime
+        working-directory: host-runtime
+        run: cargo build --release
+
+      - name: Configure RED4ext adapter
+        run: cmake -S adapter -B adapter/build
+
+      - name: Build release adapter
+        run: cmake --build adapter/build --config Release --parallel 4
+
+      - name: Test generated host-operation registry
+        run: ctest --test-dir adapter/build -C Release --output-on-failure
+
+      - name: Prove canonical Lisp dispatch
+        shell: pwsh
+        run: >-
+          & .\adapter\build\src\Release\my-lisp-cyberpunk-dispatch-witness.exe
+          .\host-runtime\target\release\wsm_my_lisp_cyberpunk_dll.dll
+          .\scripts\scenario-log.lisp
+          .\scripts\scenario-silent.lisp
