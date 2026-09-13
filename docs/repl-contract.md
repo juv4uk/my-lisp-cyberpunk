@@ -9,7 +9,7 @@ C++ provide capabilities and scheduling only.
 
 ## Scope of the first slice
 
-- Bind only `127.0.0.1`; never a LAN interface.
+- Bind only `127.0.0.1:40777`; never a LAN interface.
 - Accept one UTF-8 Lisp form per newline-delimited request.
 - Return one newline-delimited UTF-8 result. The result is exactly the text
   returned by `wsm_eval_string`, including its existing `error:` rendering.

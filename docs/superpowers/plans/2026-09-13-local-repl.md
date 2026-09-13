@@ -59,12 +59,12 @@ int main() {
 - Consumes `local_repl::RequestQueue`.
 - Produces `LocalReplServer::Start(RequestQueue&)`, `Stop()`, and `Drain(Session*, WsmEvalStringFn, WsmFreeStringFn)`.
 
-- [ ] **Step 1: Add a failing loopback witness.** It opens `127.0.0.1`, submits two newline forms, and asserts the game-thread drain invokes the supplied fake evaluator once per form in FIFO order.
-- [ ] **Step 2: Run it and confirm it fails before the listener exists.**
-- [ ] **Step 3: Implement Winsock worker.** It accepts local clients, accumulates bytes until newline, enforces 16 KiB, and enqueues each form. The reply closure writes one response plus newline; full queue and oversize requests receive explicit errors.
-- [ ] **Step 4: Integrate lifecycle.** Start after runtime/session initialization; call `Drain` from `DispatchRunningTick`; stop and join before freeing the session on unload.
-- [ ] **Step 5: Link `ws2_32`, build Release adapter, run CTest and the witness.**
-- [ ] **Step 6: Commit** `feat(adapter): add game-thread local REPL transport`.
+- [x] **Step 1: Add a failing loopback witness.** It opens `127.0.0.1`, submits two newline forms, and asserts the game-thread drain invokes the supplied fake evaluator once per form in FIFO order.
+- [x] **Step 2: Run it and confirm it fails before the listener exists.**
+- [x] **Step 3: Implement Winsock worker.** It accepts local clients, accumulates bytes until newline, enforces 16 KiB, and enqueues each form. The reply closure writes one response plus newline; full queue and oversize requests receive explicit errors.
+- [x] **Step 4: Integrate lifecycle.** Start after runtime/session initialization; call `Drain` from `DispatchRunningTick`; stop and join before freeing the session on unload.
+- [x] **Step 5: Link `ws2_32`, build Release adapter, run CTest and the witness.**
+- [x] **Step 6: Commit** `feat(adapter): add game-thread local REPL transport`.
 
 ### Task 3: Persistent-session proof and operator runbook
 

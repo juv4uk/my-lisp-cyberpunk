@@ -54,8 +54,14 @@ public:
         return request;
     }
 
+    [[nodiscard]] std::size_t Pending() const
+    {
+        std::lock_guard lock(m_mutex);
+        return m_requests.size();
+    }
+
 private:
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;
     std::queue<Request> m_requests;
 };
 } // namespace local_repl

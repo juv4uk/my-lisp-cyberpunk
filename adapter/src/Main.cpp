@@ -12,6 +12,8 @@
 #include "generated/host_operations.generated.hpp"
 
 #include "GameHandleTable.hpp"
+#include "LocalReplQueue.hpp"
+#include "LocalReplServer.hpp"
 #include "PlayerHandleEpoch.hpp"
 #include "SurfaceExt.hpp"
 
@@ -58,6 +60,8 @@ uint64_t g_wordTrue = 0;
 GameHandleTable g_gameHandles;
 GameHandleTable::Token g_playerToken = 0;
 std::string g_dispatchSource;
+local_repl::RequestQueue g_replRequests;
+local_repl::LocalReplServer g_replServer;
 
 int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
@@ -248,10 +252,25 @@ std::string g_lastDispatchResult;
 
 bool DispatchRunningTick(RED4ext::CGameApplication*)
 {
-    if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr ||
-        g_logger == nullptr || g_dispatchSource.empty())
+    if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr || g_logger == nullptr)
     {
         return true;
+    }
+
+    g_replServer.Drain([](const std::string& source) {
+        char* result = g_wsmEvalString(g_wsmSession, source.c_str());
+        if (result == nullptr)
+        {
+            return std::string("error: Lisp evaluation returned null");
+        }
+        std::string text(result);
+        g_wsmFreeString(result);
+        return text;
+    });
+
+    if (g_dispatchSource.empty())
+    {
+        return false;
     }
 
     char* result = g_wsmEvalString(g_wsmSession, g_dispatchSource.c_str());
@@ -443,6 +462,16 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_wsmWrapTransientString = wrapTransientString;
         g_wordNil = wordNil();
         g_wordTrue = wordTrue();
+        if (!g_replServer.Start(g_replRequests))
+        {
+            logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not start local REPL on 127.0.0.1:%u",
+                           static_cast<unsigned>(local_repl::kDefaultPort));
+        }
+        else
+        {
+            logger->InfoF(aHandle, "my-lisp-cyberpunk: local REPL listening on 127.0.0.1:%u",
+                          static_cast<unsigned>(local_repl::kDefaultPort));
+        }
         guard.Release();
 
         logger->InfoF(aHandle, "my-lisp-cyberpunk: wsm_my_lisp_cyberpunk_dll.dll loaded, session ready");
@@ -450,6 +479,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
     }
     case RED4ext::v1::EMainReason::Unload:
     {
+        g_replServer.Stop();
         g_dispatchSource.clear();
         g_lastDispatchResult.clear();
         g_playerToken = 0;
