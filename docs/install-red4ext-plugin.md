@@ -13,7 +13,7 @@ RED4ext і сама гра встановлені один раз (`red4ext/RED4
 лише dll-файли:
 
 1. `my-lisp-cyberpunk-plugin.dll` (з `adapter/build/src/Release/`)
-2. `wsm_my_lisp_cyberpunk_dll.dll` — **тепер з `host-runtime/target/x86_64-pc-windows-msvc/{debug,release}/`**, не з сусіднього `wsm-my-lisp` checkout (host-runtime мігрував сюди 2026-09-11, `wsm-my-lisp#15` Phase C; див. `host-runtime/MIGRATION.md`)
+2. `wsm_my_lisp_cyberpunk_dll.dll` — **тепер з `host-runtime/target/release/`**, не з сусіднього `wsm-my-lisp` checkout (host-runtime мігрував сюди 2026-09-11, `wsm-my-lisp#15` Phase C; див. `host-runtime/MIGRATION.md`)
 3. **`scripts/` — уся папка**, не лише окремий файл (з `my-lisp-cyberpunk/scripts/*.lisp`)
    — забутий крок реально викликав `could not load scripts/dispatcher.lisp`
    у живому лозі (2026-09-11), не гіпотетичний ризик.
@@ -21,7 +21,7 @@ RED4ext і сама гра встановлені один раз (`red4ext/RED4
 ```bash
 PLUGDIR="<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin"
 cp adapter/build/src/Release/my-lisp-cyberpunk-plugin.dll "$PLUGDIR/"
-cp host-runtime/target/x86_64-pc-windows-msvc/debug/wsm_my_lisp_cyberpunk_dll.dll "$PLUGDIR/"
+cp host-runtime/target/release/wsm_my_lisp_cyberpunk_dll.dll "$PLUGDIR/"
 mkdir -p "$PLUGDIR/scripts"
 cp scripts/*.lisp "$PLUGDIR/scripts/"
 ```
@@ -36,9 +36,10 @@ DLL-файли, зайняті поточним процесом гри, нем�
 cat "<game_dir>/red4ext/logs/my-lisp-cyberpunk-plugin-*.log"
 ```
 
-Очікувана послідовність (з `docs/vertical-slice.md`): `(запиши-лог) => ()`
-одразу при завантаженні, далі `гравець-присутній?` через опитування щокадру
-в `Running`-стані, доки не з'явиться `t`.
+Очікувана послідовність (з `docs/vertical-slice.md`): `(quote ()) => ()`
+при завантаженні, далі `гравець-присутній?` через fixed dispatch у
+`Running`-стані. Коли вона повертає `t`, Lisp викликає `(клас гравець)`;
+у log з'являється спостережуваний результат, наприклад `"PlayerPuppet"`.
 
 ## Відомі ризики репаку
 
