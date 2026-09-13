@@ -330,4 +330,14 @@ mod tests {
             Err(ReadError::ArenaCapacityExceeded { required: 257, capacity: 256 })
         );
     }
+
+    #[test]
+    fn active_dispatcher_script_is_readable_by_the_fixed_dispatch_reader() {
+        let mut symbols = SymbolTable::new();
+        let mut strings = BoxedTable::new();
+        let source = include_str!("../../scripts/dispatcher.lisp");
+
+        read_one(source, &mut symbols, &mut strings)
+            .expect("the game-loaded dispatcher must be readable by this runtime");
+    }
 }
