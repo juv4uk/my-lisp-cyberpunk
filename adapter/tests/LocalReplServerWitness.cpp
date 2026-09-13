@@ -91,5 +91,33 @@ int main()
         std::cerr << "Stop left a request alive past the REPL session\n";
         return 6;
     }
+
+    if (!server.Start(queue, kTestPort))
+    {
+        std::cerr << "could not start server for idle-client shutdown\n";
+        return 7;
+    }
+    SOCKET idleClient = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (idleClient == INVALID_SOCKET ||
+        connect(idleClient, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == SOCKET_ERROR)
+    {
+        if (idleClient != INVALID_SOCKET)
+        {
+            closesocket(idleClient);
+        }
+        server.Stop();
+        std::cerr << "could not connect idle loopback client\n";
+        return 8;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    const auto stopStarted = std::chrono::steady_clock::now();
+    server.Stop();
+    const auto stopElapsed = std::chrono::steady_clock::now() - stopStarted;
+    closesocket(idleClient);
+    if (stopElapsed > std::chrono::seconds(1))
+    {
+        std::cerr << "idle client kept Stop blocked\n";
+        return 9;
+    }
     return 0;
 }

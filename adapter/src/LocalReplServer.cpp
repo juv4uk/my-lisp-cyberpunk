@@ -43,11 +43,22 @@ void SendLine(SOCKET client, const std::string& text)
 
 void ServeClient(LocalReplServer::Impl& impl, SOCKET client)
 {
+    constexpr DWORD kReceiveTimeoutMs = 100;
+    if (setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&kReceiveTimeoutMs),
+                   sizeof(kReceiveTimeoutMs)) == SOCKET_ERROR)
+    {
+        return;
+    }
+
     std::string buffered;
     char chunk[1024];
     while (impl.running)
     {
         const int received = recv(client, chunk, sizeof(chunk), 0);
+        if (received == SOCKET_ERROR && WSAGetLastError() == WSAETIMEDOUT)
+        {
+            continue;
+        }
         if (received <= 0)
         {
             return;
