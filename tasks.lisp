@@ -63,6 +63,14 @@
      (capabilities . (benchmark fixed-dispatch evidence))
      (description . "Створити Release x64 adapter harness, який вимірює fixed `.my` dispatch окремо від WSM microbench і реального RED4ext frame.")
      (acceptance . "30 серій по 10 000 викликів після warm-up; BENCH_RESULT з median/p95; correctness witness і timing не змішані; live-game вимір іде окремо.")))
+   ("CP-CML-AOT-DISPATCH" .
+    ((priority . 8.7)
+     (done . nil)
+     (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
+     (capabilities . (cml aot fixed-dispatch host-abi))
+     (evidence . ("docs/cml-aot-dispatch-contract.md" "adapter/host-operations.lisp"))
+     (description . "Підключити CML host-target для fixed-dispatch artifact: Running tick викликає скомпільований Lisp без reader/eval рядка; canonical REPL session лишається окремим шляхом." )
+     (acceptance . "Два CML artifacts над тим самим C++ host дають різну capability-поведінку; artifact не містить main/exit; ABI identity/version перевіряються; WSM fallback, local REPL і NeuralDeck не змінюються.")))
 
    ;; === Глибоке проникнення (після v0) ===
 
