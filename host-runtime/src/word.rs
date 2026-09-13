@@ -99,7 +99,10 @@ pub struct SymbolTable {
 
 impl SymbolTable {
     pub fn new() -> Self {
-        Self { name_to_id: std::collections::HashMap::new(), next_id: 1 }
+        Self {
+            name_to_id: std::collections::HashMap::new(),
+            next_id: 1,
+        }
     }
 
     pub fn intern(&mut self, name: &str) -> u64 {
@@ -184,95 +187,98 @@ pub enum BoxedValue {
 /// convention -- the two tables intentionally don't share a numbering
 /// scheme, only the general "small int in the word, real data in a side
 /// table" shape.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BoxedLifetime {
+    Persistent,
+    Transient,
+}
+struct BoxedEntry {
+    value: BoxedValue,
+    lifetime: BoxedLifetime,
+}
 #[derive(Default)]
 pub struct BoxedTable {
-    values: Vec<BoxedValue>,
+    values: Vec<Option<BoxedEntry>>,
 }
-
 impl BoxedTable {
     pub fn new() -> Self {
         Self { values: Vec::new() }
     }
-
-    /// Always allocates a new entry, even for a value equal to one
-    /// already present -- no lookup/dedup, unlike `SymbolTable::intern`.
+    fn add(&mut self, value: BoxedValue, lifetime: BoxedLifetime) -> u64 {
+        let index = self.values.len();
+        self.values.push(Some(BoxedEntry { value, lifetime }));
+        wsm_os_target::encode_boxed(index as u64 + 1).expect("boxed handle is valid")
+    }
     pub fn add_string(&mut self, value: String) -> u64 {
-        let handle = self.values.len() as u64 + 1;
-        self.values.push(BoxedValue::Str(value));
-        wsm_os_target::encode_boxed(handle).expect("handle is non-zero and within BOXED_HANDLE_MAX by construction")
+        self.add(BoxedValue::Str(value), BoxedLifetime::Transient)
     }
-
-    pub fn get_string(&self, word: u64) -> Option<&str> {
-        let handle = wsm_os_target::decode_boxed(word)?;
-        let index = (handle - 1) as usize;
-        match self.values.get(index) {
-            Some(BoxedValue::Str(s)) => Some(s.as_str()),
-            _ => None,
-        }
-    }
-
-    /// Same shape as `add_string`, for an opaque game-engine handle
-    /// instead of a string. The pointer is stored and returned verbatim,
-    /// never dereferenced here -- see `BoxedValue::GameHandle`'s own doc.
     pub fn add_game_handle(&mut self, handle: *mut core::ffi::c_void) -> u64 {
-        let index = self.values.len() as u64 + 1;
-        self.values.push(BoxedValue::GameHandle(handle));
-        wsm_os_target::encode_boxed(index).expect("handle is non-zero and within BOXED_HANDLE_MAX by construction")
+        self.add(BoxedValue::GameHandle(handle), BoxedLifetime::Persistent)
     }
-
+    pub fn add_rational(&mut self, n: i64, d: i64) -> u64 {
+        assert_ne!(d, 0, "Rational denominator must not be zero");
+        let (n, d) = reduce(n, d);
+        self.add(BoxedValue::Rational(n, d), BoxedLifetime::Persistent)
+    }
+    fn entry(&self, word: u64) -> Option<&BoxedEntry> {
+        self.values
+            .get((wsm_os_target::decode_boxed(word)? - 1) as usize)?
+            .as_ref()
+    }
+    pub fn get_string(&self, word: u64) -> Option<&str> {
+        match &self.entry(word)?.value {
+            BoxedValue::Str(s) => Some(s),
+            _ => None,
+        }
+    }
     pub fn get_game_handle(&self, word: u64) -> Option<*mut core::ffi::c_void> {
-        let handle = wsm_os_target::decode_boxed(word)?;
-        let index = (handle - 1) as usize;
-        match self.values.get(index) {
-            Some(BoxedValue::GameHandle(ptr)) => Some(*ptr),
+        match &self.entry(word)?.value {
+            BoxedValue::GameHandle(p) => Some(*p),
             _ => None,
         }
     }
-
-    /// Reduces `numerator/denominator` to lowest terms with a positive
-    /// denominator (my-lisp's own invariant, confirmed 2026-09-11 --
-    /// see `BoxedValue::Rational`'s own doc) and stores it. `denominator
-    /// == 0` panics -- a Rational is a fact about a number, not
-    /// something with an "undefined" state this crate should silently
-    /// paper over; a caller constructing one from host data it doesn't
-    /// yet trust should validate the denominator before calling this,
-    /// not rely on this function to fail softly.
-    pub fn add_rational(&mut self, numerator: i64, denominator: i64) -> u64 {
-        assert_ne!(denominator, 0, "Rational denominator must not be zero");
-        let (numerator, denominator) = reduce(numerator, denominator);
-        let handle = self.values.len() as u64 + 1;
-        self.values.push(BoxedValue::Rational(numerator, denominator));
-        wsm_os_target::encode_boxed(handle).expect("handle is non-zero and within BOXED_HANDLE_MAX by construction")
-    }
-
-    /// Returns `(numerator, denominator)`, already reduced with a
-    /// positive denominator (the invariant `add_rational` establishes at
-    /// construction, not just at print time).
     pub fn get_rational(&self, word: u64) -> Option<(i64, i64)> {
-        let handle = wsm_os_target::decode_boxed(word)?;
-        let index = (handle - 1) as usize;
-        match self.values.get(index) {
-            Some(BoxedValue::Rational(n, d)) => Some((*n, *d)),
+        match &self.entry(word)?.value {
+            BoxedValue::Rational(n, d) => Some((*n, *d)),
             _ => None,
         }
     }
-
-    /// For printer.rs: which `BoxedValue` kind `word` refers to, without
-    /// exposing the actual `GameHandle` pointer value to a printed
-    /// representation (that would leak a host address into Lisp-visible
-    /// text, defeating the whole "opaque, not a raw pointer" point).
     pub fn kind_of(&self, word: u64) -> Option<BoxedKind> {
-        let handle = wsm_os_target::decode_boxed(word)?;
-        let index = (handle - 1) as usize;
-        match self.values.get(index) {
-            Some(BoxedValue::Str(_)) => Some(BoxedKind::Str),
-            Some(BoxedValue::GameHandle(_)) => Some(BoxedKind::GameHandle),
-            Some(BoxedValue::Rational(_, _)) => Some(BoxedKind::Rational),
-            None => None,
+        match &self.entry(word)?.value {
+            BoxedValue::Str(_) => Some(BoxedKind::Str),
+            BoxedValue::GameHandle(_) => Some(BoxedKind::GameHandle),
+            BoxedValue::Rational(_, _) => Some(BoxedKind::Rational),
         }
+    }
+    pub fn clear_transient(&mut self) {
+        for entry in &mut self.values {
+            if matches!(
+                entry,
+                Some(BoxedEntry {
+                    lifetime: BoxedLifetime::Transient,
+                    ..
+                })
+            ) {
+                *entry = None;
+            }
+        }
+    }
+    #[cfg(test)]
+    pub fn transient_len(&self) -> usize {
+        self.values
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    Some(BoxedEntry {
+                        lifetime: BoxedLifetime::Transient,
+                        ..
+                    })
+                )
+            })
+            .count()
     }
 }
-
 /// Euclid's algorithm on the absolute values, then reattaches the sign so
 /// the denominator ends up positive (moving any sign to the numerator) --
 /// matches my-lisp's own stated `Rational` invariant exactly ("denominator
@@ -313,7 +319,10 @@ mod tests {
         assert_eq!(boxed.get_string(handle_word), None); // wrong kind, not a crash
         assert_eq!(boxed.get_string(string_word), Some("пістолет"));
         assert_eq!(boxed.get_game_handle(string_word), None); // wrong kind, not a crash
-        assert!(matches!(boxed.kind_of(handle_word), Some(BoxedKind::GameHandle)));
+        assert!(matches!(
+            boxed.kind_of(handle_word),
+            Some(BoxedKind::GameHandle)
+        ));
         assert!(matches!(boxed.kind_of(string_word), Some(BoxedKind::Str)));
         assert_ne!(handle_word, string_word);
     }

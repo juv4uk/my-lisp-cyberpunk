@@ -77,11 +77,16 @@ pub struct Session {
 /// arguments in `argv`, must write its Word result to `*out`, and returns
 /// 0 on success or a nonzero host-defined error code. Matches nucleus.s's
 /// own convention of raw Word (u64) values, not a richer marshaled type.
-pub type HostPrimitiveFn = unsafe extern "C" fn(argc: usize, argv: *const u64, out: *mut u64) -> i32;
+pub type HostPrimitiveFn =
+    unsafe extern "C" fn(argc: usize, argv: *const u64, out: *mut u64) -> i32;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wsm_session_init() -> *mut Session {
-    Box::into_raw(Box::new(Session { env: Env::new(), symbols: SymbolTable::new(), boxed: BoxedTable::new() }))
+    Box::into_raw(Box::new(Session {
+        env: Env::new(),
+        symbols: SymbolTable::new(),
+        boxed: BoxedTable::new(),
+    }))
 }
 
 /// # Safety
@@ -165,7 +170,10 @@ pub unsafe extern "C" fn wsm_bind(session: *mut Session, name: *const c_char, va
 /// `session` must be a live pointer from `wsm_session_init`. `source` must
 /// be a valid NUL-terminated UTF-8 C string for the duration of this call.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wsm_eval_string(session: *mut Session, source: *const c_char) -> *mut c_char {
+pub unsafe extern "C" fn wsm_eval_string(
+    session: *mut Session,
+    source: *const c_char,
+) -> *mut c_char {
     let message = if session.is_null() || source.is_null() {
         "error: null session or source pointer".to_string()
     } else {
@@ -229,38 +237,31 @@ pub unsafe extern "C" fn wsm_eval_string(session: *mut Session, source: *const c
 /// actually threads through -- a bigger change than this fix, not
 /// attempted here.
 fn eval_str(session: &mut Session, text: &str) -> String {
+    session.boxed.clear_transient();
     unsafe { crate::wsm_arena_reset(core::ptr::null_mut()) };
-    let word = match reader::read_one(text, &mut session.symbols, &mut session.boxed) {
-        Ok(w) => w,
-        Err(ReadError::UnexpectedEof) => return "error: unexpected end of input".to_string(),
-        Err(ReadError::UnexpectedCloseParen) => return "error: unexpected ')'".to_string(),
-        Err(ReadError::UnterminatedString) => return "error: unterminated string literal".to_string(),
-        Err(ReadError::TrailingInput(rest)) => return format!("error: trailing input: {rest}"),
+    let result = match reader::read_one(text, &mut session.symbols, &mut session.boxed) {
+        Ok(word) => match eval::eval(word, &session.env, &session.symbols) {
+            Ok(value) => value_to_string(value, &session.symbols, &session.boxed),
+            Err(EvalError::UnknownSymbol(name)) => {
+                format!("error: unknown symbol · nevidomyi symvol · unbekanntes Symbol: {name}")
+            }
+            Err(EvalError::NotCallable) => "error: not callable".to_string(),
+            Err(EvalError::InvalidForm(message)) => format!("error: invalid form: {message}"),
+            Err(EvalError::HostPrimitiveFailed { name, message }) => {
+                format!("error: {name} failed: {message}")
+            }
+        },
+        Err(ReadError::UnexpectedEof) => "error: unexpected end of input".to_string(),
+        Err(ReadError::UnexpectedCloseParen) => "error: unexpected ')'".to_string(),
+        Err(ReadError::UnterminatedString) => "error: unterminated string literal".to_string(),
+        Err(ReadError::TrailingInput(rest)) => format!("error: trailing input: {rest}"),
         Err(ReadError::ArenaCapacityExceeded { required, capacity }) => {
-            return format!("error: form needs {required} cons cells; arena capacity is {capacity}")
+            format!("error: form needs {required} cons cells; arena capacity is {capacity}")
         }
     };
-    match eval::eval(word, &session.env, &session.symbols) {
-        Ok(result) => value_to_string(result, &session.symbols, &session.boxed),
-        // Matches my-lisp's own exact trilingual UnknownSymbol text
-        // verbatim (docs/cyberpunk-host-dispatch-fixtures.md §4, quoting
-        // crates/my-lisp/src/eval/mod.rs, confirmed against a real run of
-        // their CLI, not from memory) -- their fixture doc explicitly
-        // offers matching on the `: <name>` suffix as an acceptable
-        // alternative for a minimal implementation, but matching verbatim
-        // costs nothing here and keeps this crate's error text directly
-        // comparable to my-lisp's own oracle output.
-        Err(EvalError::UnknownSymbol(name)) => {
-            format!("error: unknown symbol · nevidomyi symvol · unbekanntes Symbol: {name}")
-        }
-        Err(EvalError::NotCallable) => "error: not callable".to_string(),
-        Err(EvalError::InvalidForm(message)) => format!("error: invalid form: {message}"),
-        Err(EvalError::HostPrimitiveFailed { name, message }) => {
-            format!("error: {name} failed: {message}")
-        }
-    }
+    session.boxed.clear_transient();
+    result
 }
-
 /// # Safety
 /// `s` must be a pointer previously returned by `wsm_eval_string` (or
 /// null, which is a no-op) and not already freed.
@@ -464,10 +465,16 @@ mod tests {
             assert!(!session.is_null());
 
             let name = CString::new("player").unwrap();
-            assert_eq!(wsm_bind(session, name.as_ptr(), crate::word::encode_fixnum(7)), 0);
+            assert_eq!(
+                wsm_bind(session, name.as_ptr(), crate::word::encode_fixnum(7)),
+                0
+            );
 
             let prim_name = CString::new("teleport").unwrap();
-            assert_eq!(wsm_register_primitive(session, prim_name.as_ptr(), stub_teleport), 0);
+            assert_eq!(
+                wsm_register_primitive(session, prim_name.as_ptr(), stub_teleport),
+                0
+            );
 
             let source = CString::new("(teleport player 100 200 50)").unwrap();
             let result_ptr = wsm_eval_string(session, source.as_ptr());
@@ -529,10 +536,16 @@ mod tests {
             let fake_handle = 0x5555_usize as *mut core::ffi::c_void;
 
             let mut word: u64 = 0;
-            assert_eq!(wsm_wrap_game_handle(session, fake_handle, &mut word as *mut u64), 0);
+            assert_eq!(
+                wsm_wrap_game_handle(session, fake_handle, &mut word as *mut u64),
+                0
+            );
 
             let mut recovered: *mut core::ffi::c_void = core::ptr::null_mut();
-            assert_eq!(wsm_unwrap_game_handle(session, word, &mut recovered as *mut _), 0);
+            assert_eq!(
+                wsm_unwrap_game_handle(session, word, &mut recovered as *mut _),
+                0
+            );
             assert_eq!(recovered, fake_handle);
 
             // Wrong-kind word (a Fixnum, not a GameHandle-carrying Boxed word)
@@ -556,15 +569,24 @@ mod tests {
             let mut word: u64 = 0;
             assert_eq!(wsm_wrap_rational(session, 5, 336, &mut word as *mut u64), 0);
             let (mut n, mut d) = (0i64, 0i64);
-            assert_eq!(wsm_unwrap_rational(session, word, &mut n as *mut i64, &mut d as *mut i64), 0);
+            assert_eq!(
+                wsm_unwrap_rational(session, word, &mut n as *mut i64, &mut d as *mut i64),
+                0
+            );
             assert_eq!((n, d), (5, 336));
 
             // Reduction happens at construction, per my-lisp's confirmed
             // invariant -- 10/20 comes back as 2/4 reduced, not stored raw.
             let mut word2: u64 = 0;
-            assert_eq!(wsm_wrap_rational(session, 10, 20, &mut word2 as *mut u64), 0);
+            assert_eq!(
+                wsm_wrap_rational(session, 10, 20, &mut word2 as *mut u64),
+                0
+            );
             let (mut n2, mut d2) = (0i64, 0i64);
-            assert_eq!(wsm_unwrap_rational(session, word2, &mut n2 as *mut i64, &mut d2 as *mut i64), 0);
+            assert_eq!(
+                wsm_unwrap_rational(session, word2, &mut n2 as *mut i64, &mut d2 as *mut i64),
+                0
+            );
             assert_eq!((n2, d2), (1, 2));
 
             // Negative denominator: sign moves to the numerator, denominator
@@ -572,18 +594,29 @@ mod tests {
             let mut word3: u64 = 0;
             assert_eq!(wsm_wrap_rational(session, 3, -4, &mut word3 as *mut u64), 0);
             let (mut n3, mut d3) = (0i64, 0i64);
-            assert_eq!(wsm_unwrap_rational(session, word3, &mut n3 as *mut i64, &mut d3 as *mut i64), 0);
+            assert_eq!(
+                wsm_unwrap_rational(session, word3, &mut n3 as *mut i64, &mut d3 as *mut i64),
+                0
+            );
             assert_eq!((n3, d3), (-3, 4));
 
             // Zero denominator is rejected, not silently accepted.
             let mut bad_word: u64 = 0;
-            assert_eq!(wsm_wrap_rational(session, 1, 0, &mut bad_word as *mut u64), -1);
+            assert_eq!(
+                wsm_wrap_rational(session, 1, 0, &mut bad_word as *mut u64),
+                -1
+            );
 
             // Wrong-kind word (a Fixnum, not a Rational-carrying Boxed word)
             // reports 1, not a crash.
             let (mut wn, mut wd) = (0i64, 0i64);
             assert_eq!(
-                wsm_unwrap_rational(session, crate::word::encode_fixnum(42), &mut wn as *mut i64, &mut wd as *mut i64),
+                wsm_unwrap_rational(
+                    session,
+                    crate::word::encode_fixnum(42),
+                    &mut wn as *mut i64,
+                    &mut wd as *mut i64
+                ),
                 1
             );
 
@@ -597,7 +630,11 @@ mod tests {
         // `(/ 5 6 8 7)` -> "5/336".
         unsafe {
             let session = wsm_session_init();
-            unsafe extern "C" fn stub_position(_argc: usize, _argv: *const u64, out: *mut u64) -> i32 {
+            unsafe extern "C" fn stub_position(
+                _argc: usize,
+                _argv: *const u64,
+                out: *mut u64,
+            ) -> i32 {
                 RATIONAL_SESSION.with(|s| wsm_wrap_rational(*s.borrow(), 5, 336, out))
             }
             thread_local! {
@@ -606,7 +643,10 @@ mod tests {
             RATIONAL_SESSION.with(|s| *s.borrow_mut() = session);
 
             let name = CString::new("позиція-x").unwrap();
-            assert_eq!(wsm_register_primitive(session, name.as_ptr(), stub_position), 0);
+            assert_eq!(
+                wsm_register_primitive(session, name.as_ptr(), stub_position),
+                0
+            );
             let source = CString::new("(позиція-x)").unwrap();
             let result_ptr = wsm_eval_string(session, source.as_ptr());
             let result = CStr::from_ptr(result_ptr).to_str().unwrap().to_string();
@@ -625,7 +665,11 @@ mod tests {
         // a second receives that Word back and unwraps it -- proving the
         // Word survives a round trip through wsm_eval_string, not just a
         // direct Rust-level call.
-        unsafe extern "C" fn stub_get_player(_argc: usize, _argv: *const u64, out: *mut u64) -> i32 {
+        unsafe extern "C" fn stub_get_player(
+            _argc: usize,
+            _argv: *const u64,
+            out: *mut u64,
+        ) -> i32 {
             // In this stub, the "session" isn't reachable from a plain
             // HostPrimitiveFn -- real adapter code would close over its
             // own session pointer. Here we just prove the *shape* works
@@ -638,7 +682,11 @@ mod tests {
             })
         }
 
-        unsafe extern "C" fn stub_check_player(argc: usize, argv: *const u64, out: *mut u64) -> i32 {
+        unsafe extern "C" fn stub_check_player(
+            argc: usize,
+            argv: *const u64,
+            out: *mut u64,
+        ) -> i32 {
             assert_eq!(argc, 1);
             let word = *argv;
             SESSION_FOR_TEST.with(|s| {
@@ -666,9 +714,15 @@ mod tests {
             SESSION_FOR_TEST.with(|s| *s.borrow_mut() = session);
 
             let get_player_name = CString::new("гравець-handle").unwrap();
-            assert_eq!(wsm_register_primitive(session, get_player_name.as_ptr(), stub_get_player), 0);
+            assert_eq!(
+                wsm_register_primitive(session, get_player_name.as_ptr(), stub_get_player),
+                0
+            );
             let check_name = CString::new("перевір-гравця").unwrap();
-            assert_eq!(wsm_register_primitive(session, check_name.as_ptr(), stub_check_player), 0);
+            assert_eq!(
+                wsm_register_primitive(session, check_name.as_ptr(), stub_check_player),
+                0
+            );
 
             let source = CString::new("(перевір-гравця (гравець-handle))").unwrap();
             let result_ptr = wsm_eval_string(session, source.as_ptr());
@@ -710,12 +764,18 @@ mod tests {
         unsafe {
             let session = wsm_session_init();
             let prim_name = CString::new("дай-зброю").unwrap();
-            assert_eq!(wsm_register_primitive(session, prim_name.as_ptr(), stub_give_weapon), 0);
+            assert_eq!(
+                wsm_register_primitive(session, prim_name.as_ptr(), stub_give_weapon),
+                0
+            );
 
             let source = CString::new("(дай-зброю)").unwrap();
             let result_ptr = wsm_eval_string(session, source.as_ptr());
             let result = CStr::from_ptr(result_ptr).to_str().unwrap().to_string();
-            assert_eq!(result, "error: дай-зброю failed: host primitive reported error code 1");
+            assert_eq!(
+                result,
+                "error: дай-зброю failed: host primitive reported error code 1"
+            );
             wsm_free_string(result_ptr);
 
             wsm_session_free(session);
@@ -728,8 +788,14 @@ mod tests {
             let session = wsm_session_init();
 
             for (source, expected) in [
-                ("(quote)", "error: invalid form: quote takes exactly one argument"),
-                ("(cond (t 1 2))", "error: invalid form: cond clause takes exactly two forms"),
+                (
+                    "(quote)",
+                    "error: invalid form: quote takes exactly one argument",
+                ),
+                (
+                    "(cond (t 1 2))",
+                    "error: invalid form: cond clause takes exactly two forms",
+                ),
             ] {
                 let source = CString::new(source).unwrap();
                 let result_ptr = wsm_eval_string(session, source.as_ptr());
@@ -748,6 +814,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn repeated_string_eval_reclaims_transient_boxed_values() {
+        unsafe {
+            let session = wsm_session_init();
+            let source = CString::new(r#""тимчасове""#).unwrap();
+            for _ in 0..500 {
+                let result = wsm_eval_string(session, source.as_ptr());
+                wsm_free_string(result);
+            }
+            assert_eq!((*session).boxed.transient_len(), 0);
+            wsm_session_free(session);
+        }
+    }
     #[test]
     fn host_word_exports_preserve_canonical_lisp_identity() {
         assert_eq!(wsm_word_nil(), crate::word::WORD_NIL);
