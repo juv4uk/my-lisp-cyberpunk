@@ -10,6 +10,7 @@
 #include <windows.h>
 
 #include "generated/host_operations.generated.hpp"
+#include "generated/host_bindings.generated.hpp"
 
 #include "GameHandleTable.hpp"
 #include "LocalReplQueue.hpp"
@@ -112,7 +113,7 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 
     if (action == player_handle_epoch::Action::BindNil)
     {
-        if (g_wsmSession == nullptr || g_wsmBind == nullptr || g_wsmBind(g_wsmSession, "гравець", g_wordNil) != 0)
+        if (g_wsmSession == nullptr || g_wsmBind == nullptr || g_wsmBind(g_wsmSession, host_bindings::CPB_0001.surface, g_wordNil) != 0)
         {
             return 4;
         }
@@ -139,7 +140,7 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
             g_gameHandles.Release(nextToken);
             return 7;
         }
-        if (g_wsmBind(g_wsmSession, "гравець", playerWord) != 0)
+        if (g_wsmBind(g_wsmSession, host_bindings::CPB_0001.surface, playerWord) != 0)
         {
             g_gameHandles.Release(nextToken);
             return 8;
