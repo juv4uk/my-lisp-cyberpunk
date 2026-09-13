@@ -53,10 +53,14 @@ pub const HOST_FEATURE_CANONICAL_WORDS: u64 = 1 << 0;
 pub const HOST_FEATURE_GAME_HANDLE: u64 = 1 << 1;
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wsm_host_abi_version() -> u32 { HOST_ABI_VERSION }
+pub extern "C" fn wsm_host_abi_version() -> u32 {
+    HOST_ABI_VERSION
+}
 
 #[unsafe(no_mangle)]
-pub extern "C" fn wsm_host_feature_bits() -> u64 { HOST_FEATURE_CANONICAL_WORDS | HOST_FEATURE_GAME_HANDLE }
+pub extern "C" fn wsm_host_feature_bits() -> u64 {
+    HOST_FEATURE_CANONICAL_WORDS | HOST_FEATURE_GAME_HANDLE
+}
 /// Повертає єдине ABI-представлення порожнього списку, щоб host не дублював
 /// Word encoding поза runtime.
 #[unsafe(no_mangle)]
@@ -414,6 +418,40 @@ pub unsafe extern "C" fn wsm_wrap_rational(
     result.unwrap_or(-2)
 }
 
+/// Wraps an exact fraction that is valid only for the current
+/// `wsm_eval_string` call. Use this from a host primitive that derives a
+/// fresh observation on every tick, such as a world position: the evaluator
+/// prints or passes the value during the call, then reclaims it before the
+/// next call. Persistent host state and bindings must use `wsm_wrap_rational`
+/// instead.
+///
+/// Writes the encoded Word to `*out` and returns 0 on success. Returns -1
+/// for a null `session`/`out` pointer or a zero `denominator`, and -2 if a
+/// panic was caught.
+///
+/// # Safety
+/// `session` must be a live pointer from `wsm_session_init`. `out` must be
+/// valid and writable for the duration of this call. The returned Word must
+/// not be retained beyond the enclosing `wsm_eval_string` call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wsm_wrap_transient_rational(
+    session: *mut Session,
+    numerator: i64,
+    denominator: i64,
+    out: *mut u64,
+) -> i32 {
+    if session.is_null() || out.is_null() || denominator == 0 {
+        return -1;
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let session = unsafe { &mut *session };
+        let word = session.boxed.add_transient_rational(numerator, denominator);
+        unsafe { *out = word };
+        0
+    }));
+    result.unwrap_or(-2)
+}
+
 /// Recovers the `(numerator, denominator)` a `Boxed` Word (produced by
 /// `wsm_wrap_rational`) carries -- already reduced, denominator always
 /// positive. Writes them to `*out_numerator`/`*out_denominator` and
@@ -634,6 +672,37 @@ mod tests {
     }
 
     #[test]
+    fn transient_rationals_are_reclaimed_after_each_eval() {
+        unsafe extern "C" fn stub_position(_argc: usize, _argv: *const u64, out: *mut u64) -> i32 {
+            TRANSIENT_RATIONAL_SESSION
+                .with(|s| wsm_wrap_transient_rational(*s.borrow(), 5, 336, out))
+        }
+        thread_local! {
+            static TRANSIENT_RATIONAL_SESSION: std::cell::RefCell<*mut Session> = std::cell::RefCell::new(core::ptr::null_mut());
+        }
+
+        unsafe {
+            let session = wsm_session_init();
+            TRANSIENT_RATIONAL_SESSION.with(|s| *s.borrow_mut() = session);
+            let name = CString::new("позиція-x").unwrap();
+            assert_eq!(
+                wsm_register_primitive(session, name.as_ptr(), stub_position),
+                0
+            );
+
+            for _ in 0..500 {
+                let source = CString::new("(позиція-x)").unwrap();
+                let result = wsm_eval_string(session, source.as_ptr());
+                assert_eq!(CStr::from_ptr(result).to_str().unwrap(), "5/336");
+                wsm_free_string(result);
+            }
+
+            assert_eq!((&*session).boxed.transient_len(), 0);
+            wsm_session_free(session);
+        }
+    }
+
+    #[test]
     fn rational_prints_as_n_slash_d_matching_my_lisp_oracle_format() {
         // Matches conformance.my's own oracle output verbatim:
         // `(/ 5 6 8 7)` -> "5/336".
@@ -839,7 +908,10 @@ mod tests {
     #[test]
     fn host_word_exports_preserve_canonical_lisp_identity() {
         assert_eq!(wsm_host_abi_version(), HOST_ABI_VERSION);
-        assert_eq!(wsm_host_feature_bits() & HOST_FEATURE_GAME_HANDLE, HOST_FEATURE_GAME_HANDLE);
+        assert_eq!(
+            wsm_host_feature_bits() & HOST_FEATURE_GAME_HANDLE,
+            HOST_FEATURE_GAME_HANDLE
+        );
         assert_eq!(wsm_word_nil(), crate::word::WORD_NIL);
         assert_eq!(wsm_word_true(), crate::word::SYM_T_WORD);
     }

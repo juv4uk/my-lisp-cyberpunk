@@ -220,6 +220,11 @@ impl BoxedTable {
         let (n, d) = reduce(n, d);
         self.add(BoxedValue::Rational(n, d), BoxedLifetime::Persistent)
     }
+    pub fn add_transient_rational(&mut self, n: i64, d: i64) -> u64 {
+        assert_ne!(d, 0, "Rational denominator must not be zero");
+        let (n, d) = reduce(n, d);
+        self.add(BoxedValue::Rational(n, d), BoxedLifetime::Transient)
+    }
     fn entry(&self, word: u64) -> Option<&BoxedEntry> {
         self.values
             .get((wsm_os_target::decode_boxed(word)? - 1) as usize)?

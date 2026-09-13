@@ -3,10 +3,10 @@
 ; Created 2026-09-10 empty; recommendations set 2026-09-10 from cross-repo review.
 ; Updated 2026-09-11: deep-penetration task ladder after v0 fixed-dispatch.
 ; Updated 2026-09-11 (2): CP-PLAYER-HANDLE-LIVE runbook + acceptance ready.
-; my-lisp remains sole language authority. Runtime embed work (win64 nucleus,
-; reader/eval/ffi) lives in wsm-my-lisp (dll/). Cyberpunk-specific RED4ext
-; integration (this repo's adapter/) does not live in wsm-my-lisp. This repo
-; must not silently reimplement eval.
+; my-lisp remains sole language authority. Runtime embed work (Win64 nucleus,
+; reader/eval/ffi) lives in this repo's host-runtime/. Cyberpunk-specific
+; RED4ext integration lives in adapter/. This repo must not silently
+; reimplement eval.
 
 ((kind . tasks)
  (version . 1)
@@ -75,12 +75,20 @@
      (description . "Живий transcript у грі: (гравець-присутній?) повертає t, прив'язує opaque `гравець`, і результат видно в RED4ext log. Без цього не рухатись далі.")
      (acceptance . "Живий лог 2026-09-11: (quote ()) => (), present=false→true перехід, \"retained player as opaque token=1\", .my-диспетчер сам обрав викликати запиши-лог лише коли гравець присутній. Дедуплікація логу підтверджена (9 рядків, не 6.6MB). Один реальний log-фрагмент з Running + token ≠ 0 + (quote ()) oracle. Див. docs/cp-player-handle-live-runbook.md.")))
    ("CP-PLAYER-CLASSNAME" .
-    ((priority . 9.0)
-     (done . nil)
-     (depends-on . ("CP-PLAYER-HANDLE-LIVE"))
+   ((priority . 9.0)
+    (done . nil)
+     (depends-on . ("CP-PLAYER-HANDLE-LIVE" "CP-BOXED-LIFETIME"))
      (capabilities . (rtti read-only))
      (description . "Перша read-only властивість через opaque handle: (клас гравець) → PlayerPuppet (або точне ім'я з RTTI). C++ тільки виконує GetClassName / аналог, Lisp бачить рядок/символ.")
      (acceptance . "Сценарій повертає очікуване ім'я класу; live transcript є.")))
+   ("CP-BOXED-LIFETIME" .
+    ((priority . 9.1)
+     (done . t)
+     (depends-on . ("CP-PLAYER-HANDLE-LIVE"))
+     (capabilities . (host-runtime boxed-lifetime rational))
+     (evidence . ("host-runtime/src/word.rs" "host-runtime/src/ffi.rs"))
+     (description . "Розділити persistent handle/state і transient результати одного eval; надати FFI для тимчасового exact Rational, придатного для tick-спостережень.")
+     (acceptance . "500 послідовних (позиція-x) через host primitive повертають 5/336; transient boxed values після кожного eval дорівнюють нулю; persistent GameHandle/Rational не інвалідовані.")))
    ("CP-PLAYER-WORLD-POSITION" .
     ((priority . 8.7)
      (done . nil)
