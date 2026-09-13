@@ -22,7 +22,7 @@ RED4ext v1.30.0, Cyberpunk 2077 v2.31) — transcript в закритому issu
 2. завантажує `wsm_my_lisp_cyberpunk_dll.dll` через `LoadLibraryW`;
 3. створює Lisp-сесію через `wsm_session_init`;
 4. реєструє host-примітиву `запиши-лог`;
-5. реєструє host-примітиву `гравець-присутній?`;
+5. реєструє host-примітиви `гравець-присутній?` і `клас`;
 6. обчислює `(quote ())`, звіряє результат з oracle (`()`), fails closed
    при розбіжності;
 7. доставляє кожен `Running` tick в один fixed-dispatch `.my` вираз з
@@ -32,7 +32,10 @@ RED4ext v1.30.0, Cyberpunk 2077 v2.31) — transcript в закритому issu
    копіює `RED4ext::Handle<IScriptable>` у власну
    C++-таблицю, передає Lisp тільки session-local token і прив'язує його
    під іменем `гравець`;
-9. записує лише спостережуваний результат Lisp-dispatch у RED4ext log,
+9. `(клас гравець)` за потреби розгортає token через таблицю adapter-а,
+   читає `IScriptable::GetType()->GetName()` і повертає копію імені як
+   тимчасовий Lisp String;
+10. записує лише спостережуваний результат Lisp-dispatch у RED4ext log,
    без інтерпретації його як команди для C++.
 
 `запиши-лог` не отримує жодних RTTI-посилань і не має доступу до
@@ -42,6 +45,10 @@ save/inventory/player state. `гравець-присутній?` торкаєт
 `IsPlayerCrouched`) — але лише перевіряє факт наявності гравця (`bool`),
 нічого не читає з самого player-об'єкта (не позицію, не здоров'я, нічого)
 і не розкриває отриманий `RED4ext::Handle` Lisp-коду як адресу.
+
+`клас` — третя, також read-only capability. Вона приймає лише opaque
+`GameHandle`, який adapter сам утримує, і повертає копію RTTI class name;
+живий transcript для неї ще потрібний.
 
 ## Очікувані рядки логу
 

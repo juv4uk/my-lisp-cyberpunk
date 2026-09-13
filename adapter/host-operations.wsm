@@ -3,4 +3,5 @@
 (host-operations/1
   (cp:0001 (surface uk запиши-лог) (arity 0) (effect log) (result nil))
   (cp:0002 (surface uk гравець-присутній?) (arity 0) (effect inspect) (result truth))
+  (cp:0003 (surface uk клас) (arity 1) (effect inspect) (result string))
 )

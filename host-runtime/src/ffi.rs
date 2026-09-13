@@ -40,8 +40,8 @@
 //! does not currently attempt to change that (would need the callback
 //! type to be `extern "C-unwind"`, a bigger design change, not done here).
 
-use std::ffi::{c_char, CStr, CString};
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::ffi::{CStr, CString, c_char};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use crate::eval::{self, Env, EvalError};
 use crate::printer::value_to_string;
@@ -51,6 +51,7 @@ use crate::word::{BoxedTable, SymbolTable};
 pub const HOST_ABI_VERSION: u32 = 1;
 pub const HOST_FEATURE_CANONICAL_WORDS: u64 = 1 << 0;
 pub const HOST_FEATURE_GAME_HANDLE: u64 = 1 << 1;
+pub const HOST_FEATURE_TRANSIENT_STRINGS: u64 = 1 << 2;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wsm_host_abi_version() -> u32 {
@@ -59,7 +60,7 @@ pub extern "C" fn wsm_host_abi_version() -> u32 {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wsm_host_feature_bits() -> u64 {
-    HOST_FEATURE_CANONICAL_WORDS | HOST_FEATURE_GAME_HANDLE
+    HOST_FEATURE_CANONICAL_WORDS | HOST_FEATURE_GAME_HANDLE | HOST_FEATURE_TRANSIENT_STRINGS
 }
 /// Повертає єдине ABI-представлення порожнього списку, щоб host не дублював
 /// Word encoding поза runtime.
@@ -338,6 +339,38 @@ pub unsafe extern "C" fn wsm_wrap_game_handle(
     let result = catch_unwind(AssertUnwindSafe(|| {
         let session = unsafe { &mut *session };
         let word = session.boxed.add_game_handle(handle);
+        unsafe { *out = word };
+        0
+    }));
+    result.unwrap_or(-2)
+}
+
+/// Copies a UTF-8 host string into a `Boxed` Word valid for the current
+/// `wsm_eval_string` call only. Use it for an observed value such as an RTTI
+/// class name; do not retain the returned Word in host state or bindings.
+///
+/// Returns 0 on success, -1 for null pointers or invalid UTF-8, and -2 if a
+/// panic was caught.
+///
+/// # Safety
+/// `session`, `value`, and `out` must be valid for the duration of this call;
+/// `value` must point to a NUL-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wsm_wrap_transient_string(
+    session: *mut Session,
+    value: *const c_char,
+    out: *mut u64,
+) -> i32 {
+    if session.is_null() || value.is_null() || out.is_null() {
+        return -1;
+    }
+    let value = match unsafe { CStr::from_ptr(value) }.to_str() {
+        Ok(value) => value,
+        Err(_) => return -1,
+    };
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let session = unsafe { &mut *session };
+        let word = session.boxed.add_string(value.to_owned());
         unsafe { *out = word };
         0
     }));
@@ -694,6 +727,37 @@ mod tests {
                 let source = CString::new("(позиція-x)").unwrap();
                 let result = wsm_eval_string(session, source.as_ptr());
                 assert_eq!(CStr::from_ptr(result).to_str().unwrap(), "5/336");
+                wsm_free_string(result);
+            }
+
+            assert_eq!((&*session).boxed.transient_len(), 0);
+            wsm_session_free(session);
+        }
+    }
+
+    #[test]
+    fn transient_host_strings_are_reclaimed_after_each_eval() {
+        unsafe extern "C" fn stub_class(_argc: usize, _argv: *const u64, out: *mut u64) -> i32 {
+            TRANSIENT_STRING_SESSION
+                .with(|s| wsm_wrap_transient_string(*s.borrow(), c"PlayerPuppet".as_ptr(), out))
+        }
+        thread_local! {
+            static TRANSIENT_STRING_SESSION: std::cell::RefCell<*mut Session> = std::cell::RefCell::new(core::ptr::null_mut());
+        }
+
+        unsafe {
+            let session = wsm_session_init();
+            TRANSIENT_STRING_SESSION.with(|s| *s.borrow_mut() = session);
+            let name = CString::new("клас").unwrap();
+            assert_eq!(
+                wsm_register_primitive(session, name.as_ptr(), stub_class),
+                0
+            );
+
+            for _ in 0..500 {
+                let source = CString::new("(клас)").unwrap();
+                let result = wsm_eval_string(session, source.as_ptr());
+                assert_eq!(CStr::from_ptr(result).to_str().unwrap(), "\"PlayerPuppet\"");
                 wsm_free_string(result);
             }
 

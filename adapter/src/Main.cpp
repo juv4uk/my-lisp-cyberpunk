@@ -34,12 +34,14 @@ using WsmBindFn = int32_t (*)(Session*, const char*, uint64_t);
 using WsmEvalStringFn = char* (*)(Session*, const char*);
 using WsmFreeStringFn = void (*)(char*);
 using WsmWrapGameHandleFn = int32_t (*)(Session*, void*, uint64_t*);
+using WsmUnwrapGameHandleFn = int32_t (*)(Session*, uint64_t, void**);
+using WsmWrapTransientStringFn = int32_t (*)(Session*, const char*, uint64_t*);
 using WsmWordFn = uint64_t (*)();
 using WsmAbiVersionFn = uint32_t (*)();
 using WsmFeatureBitsFn = uint64_t (*)();
 
 constexpr uint32_t kExpectedHostAbiVersion = 1;
-constexpr uint64_t kRequiredHostFeatures = (1ull << 0) | (1ull << 1);
+constexpr uint64_t kRequiredHostFeatures = (1ull << 0) | (1ull << 1) | (1ull << 2);
 
 HMODULE g_wsmModule = nullptr;
 Session* g_wsmSession = nullptr;
@@ -49,6 +51,8 @@ WsmEvalStringFn g_wsmEvalString = nullptr;
 WsmFreeStringFn g_wsmFreeString = nullptr;
 WsmBindFn g_wsmBind = nullptr;
 WsmWrapGameHandleFn g_wsmWrapGameHandle = nullptr;
+WsmUnwrapGameHandleFn g_wsmUnwrapGameHandle = nullptr;
+WsmWrapTransientStringFn g_wsmWrapTransientString = nullptr;
 uint64_t g_wordNil = 0;
 uint64_t g_wordTrue = 0;
 GameHandleTable g_gameHandles;
@@ -154,6 +158,44 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
     }
     *out = present ? g_wordTrue : g_wordNil;
     return 0;
+}
+
+int32_t ClassPrimitive(std::size_t argc, const uint64_t* argv, uint64_t* out)
+{
+    if (argv == nullptr || out == nullptr)
+    {
+        return 1;
+    }
+    if (argc != 1)
+    {
+        return 2;
+    }
+    if (g_wsmSession == nullptr || g_wsmUnwrapGameHandle == nullptr || g_wsmWrapTransientString == nullptr)
+    {
+        return 3;
+    }
+
+    void* opaqueToken = nullptr;
+    if (g_wsmUnwrapGameHandle(g_wsmSession, argv[0], &opaqueToken) != 0)
+    {
+        return 4;
+    }
+    const auto handle = g_gameHandles.Resolve(GameHandleTable::FromOpaqueToken(opaqueToken));
+    if (!handle || handle.GetPtr() == nullptr)
+    {
+        return 5;
+    }
+    const auto* type = handle.GetPtr()->GetType();
+    if (type == nullptr)
+    {
+        return 6;
+    }
+    const char* className = type->GetName().ToString();
+    if (className == nullptr)
+    {
+        return 7;
+    }
+    return g_wsmWrapTransientString(g_wsmSession, className, out) == 0 ? 0 : 8;
 }
 
 class WsmRuntimeGuard
@@ -325,10 +367,15 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         auto freeString = reinterpret_cast<WsmFreeStringFn>(GetProcAddress(wsmModule, "wsm_free_string"));
         auto wrapGameHandle =
             reinterpret_cast<WsmWrapGameHandleFn>(GetProcAddress(wsmModule, "wsm_wrap_game_handle"));
+        auto unwrapGameHandle =
+            reinterpret_cast<WsmUnwrapGameHandleFn>(GetProcAddress(wsmModule, "wsm_unwrap_game_handle"));
+        auto wrapTransientString =
+            reinterpret_cast<WsmWrapTransientStringFn>(GetProcAddress(wsmModule, "wsm_wrap_transient_string"));
         auto wordNil = reinterpret_cast<WsmWordFn>(GetProcAddress(wsmModule, "wsm_word_nil"));
         auto wordTrue = reinterpret_cast<WsmWordFn>(GetProcAddress(wsmModule, "wsm_word_true"));
         if (registerPrimitive == nullptr || bind == nullptr || evalString == nullptr || freeString == nullptr ||
-            wrapGameHandle == nullptr || wordNil == nullptr || wordTrue == nullptr || sessionFree == nullptr)
+            wrapGameHandle == nullptr || unwrapGameHandle == nullptr || wrapTransientString == nullptr || wordNil == nullptr ||
+            wordTrue == nullptr || sessionFree == nullptr)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: required WSM host ABI export is missing");
             return false;
@@ -343,6 +390,12 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         if (registerPrimitive(session, host_operations::OP_CP_0002.surface, &PlayerPresentPrimitive) != 0)
         {
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not register гравець-присутній?");
+            return false;
+        }
+
+        if (registerPrimitive(session, host_operations::OP_CP_0003.surface, &ClassPrimitive) != 0)
+        {
+            logger->ErrorF(aHandle, "my-lisp-cyberpunk: could not register клас");
             return false;
         }
 
@@ -386,6 +439,8 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_wsmFreeString = freeString;
         g_wsmBind = bind;
         g_wsmWrapGameHandle = wrapGameHandle;
+        g_wsmUnwrapGameHandle = unwrapGameHandle;
+        g_wsmWrapTransientString = wrapTransientString;
         g_wordNil = wordNil();
         g_wordTrue = wordTrue();
         guard.Release();
@@ -403,6 +458,8 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         g_wsmFreeString = nullptr;
         g_wsmBind = nullptr;
         g_wsmWrapGameHandle = nullptr;
+        g_wsmUnwrapGameHandle = nullptr;
+        g_wsmWrapTransientString = nullptr;
         g_wordNil = 0;
         g_wordTrue = 0;
         if (g_wsmSession != nullptr && g_wsmModule != nullptr)
