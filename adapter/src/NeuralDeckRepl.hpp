@@ -20,7 +20,8 @@ public:
         {
             return false;
         }
-        return queue.Push(source, [&deck, source = std::move(source)](std::string result) mutable {
+        std::string transcriptSource = source;
+        return queue.Push(std::move(source), [&deck, source = std::move(transcriptSource)](std::string result) mutable {
             deck.Record(std::move(source), std::move(result));
         });
     }
