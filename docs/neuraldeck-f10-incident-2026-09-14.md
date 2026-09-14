@@ -24,6 +24,9 @@ The live log recorded the exact rejected stage:
 The fixed adapter now uses `gameuiGameSystemUI` through
 `neuraldeck::LookupUiSystemClass`.
 
+The subsequent source, ABI, dependency and test verification is recorded in
+[NeuralDeck verification record](neuraldeck-verification-2026-09-14.md).
+
 ## Errors made
 
 1. The initial implementation treated a Redscript spelling as an RTTI class

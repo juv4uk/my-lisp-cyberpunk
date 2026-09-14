@@ -60,9 +60,10 @@ canonical session bridge is available.
    session; prove definitions and host mechanisms in one game session.
 3. Add the in-process `NeuralDeckQueue` and transcript model. This replaces
    TCP as the primary interactive transport.
-4. Add a Codeware `Input/Key` callback for F10 and a testable toggle lifecycle.
-   **In progress:** the former C++ polling/RTTI bridge was rejected because it
-   cannot invoke compiled Redscript functions.
+4. Add a testable F10 toggle lifecycle. **In progress:** C++ must not invoke
+   compiled Redscript functions directly. It instead reports the F10 edge by
+   queuing a typed `NeuralDeckToggleEvent` through `UISystem.QueueEvent`; the
+   Codeware `PopupsManager` receiver owns presentation.
 5. Add the non-blocking ink overlay. **In progress:** `CustomPopup` provides
    the panel; live F10 evidence is required before this step is complete.
 6. Capture a live game witness: open, define, call the definition, inspect the
