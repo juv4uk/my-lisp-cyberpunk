@@ -26,6 +26,8 @@ listed below, this file and the docs it points to win; anything in
 ## Install / operate
 
 - [`docs/install-red4ext-plugin.md`](docs/install-red4ext-plugin.md) — build → copy → verify checklist for a local game install.
+- [`docs/local-paths-and-worklog-2026-09-14.md`](docs/local-paths-and-worklog-2026-09-14.md) — local source/game paths, deployed payload, completed work and verification map.
+- [`docs/game-verification-runbook.md`](docs/game-verification-runbook.md) — read-only deployment and launch-log tests.
 
 ## Archive
 
