@@ -22,9 +22,7 @@ wherever this repo consumes Canon forms.
 | `String` value kind | n/a (Canon data type, not a form) | Canon — immutable text value | language-level, no host-specific spelling | `host-runtime`'s `BoxedValue::Str`, `Tag::Boxed=7` (ratified `wsm-target-contract` v3) | `my-lisp` (semantics), `wsm-target-contract` (ABI tag) | confirmed | `wsm-target-contract` migration note, `host-runtime` tests |
 | `Rational` value kind | n/a (Canon data type) | Canon — exact fraction, reduced at construction | language-level | `host-runtime`'s `BoxedValue::Rational(i64,i64)`, same `Tag::Boxed` slot as String (ratified `wsm-target-contract` v4) | `my-lisp` (semantics), `wsm-target-contract` (ABI tag) | confirmed | `host-runtime/tests/my_lisp_fixture_parity.rs` §5 (5/336, 10/20→1/2); **pending**: which live RTTI call (`GetWorldPosition`) actually produces the source value — see `docs/deep-penetration-roadmap-2026-09-10.md` |
 | `GameHandle` value kind | n/a — **explicitly not Canon** | host-only — opaque token into this repo's own `GameHandleTable`, never a raw engine pointer across the FFI boundary | no language-level spelling; C++-side only | `host-runtime`'s `BoxedValue::GameHandle`, `wsm_wrap_game_handle`/`wsm_unwrap_game_handle`; `adapter/src/GameHandleTable.{hpp,cpp}` owns the real `RED4ext::Handle<T>` | **this repo** (`my-lisp-cyberpunk`), by explicit design decision (`docs/deep-penetration-roadmap-2026-09-10.md` problem 2) | confirmed, live | `docs/vertical-slice.md` transcript (`token=1`); `GameHandleTable` unit-level review (2026-09-11) |
-| `запиши-лог` | n/a — **explicitly not Canon** | host-only capability — write one log line, return `()` | Ukrainian only, no English/Sanskrit surface (host-invented name, not a language primitive) | registered via `wsm_register_primitive`; C++ `LogPrimitive` in `adapter/src/Main.cpp` | **this repo** | confirmed, live | `docs/vertical-slice.md` transcript |
-| `гравець-присутній?` | n/a — **explicitly not Canon** | host-only capability — query player-instance presence via RTTI, return `t`/`()`; synchronizes opaque `гравець` with the current engine instance and clears it on confirmed absence | Ukrainian only | `PlayerPresentPrimitive` + `PlayerHandleEpoch` in `adapter/src/Main.cpp`, called by fixed Lisp dispatch in `DispatchRunningTick` | **this repo** | confirmed, live | `docs/vertical-slice.md` transcript (`present=false→true` observed) |
-| `клас` | n/a — **explicitly not Canon** | host-only read-only capability — unwrap an opaque `GameHandle`, read `IScriptable::GetType()->GetName()`, return a transient String copy | Ukrainian only | `ClassPrimitive` in `adapter/src/Main.cpp`; `wsm_wrap_transient_string` copies the result into the current eval lifetime | **this repo** | built and test-verified; live transcript pending | `adapter/host-operations.wsm` (`cp:0003`), `scripts/scenario-player-class.lisp` |
+| Cyberpunk host capabilities | n/a — explicitly not Canon | local identities, effects and FFI admission belong to this repo | generated from `adapter/host-operations.lisp` | C++ and Markdown projections are emitted by `adapter/cmake/GenerateHostOperations.cmake` | **this repo** | machine-validated | `adapter/tests/HostOperationsProjectionTest.cmake` |
 
 ## What this audit found (no drift)
 
@@ -32,8 +30,10 @@ wherever this repo consumes Canon forms.
   `host-runtime/build.rs` already generates from the registry (migrated
   from `wsm-my-lisp`'s `55b3156`).
 - Host-only capabilities (`запиши-лог`, `гравець-присутній?`, `GameHandle`)
-  correctly have **no** semantic ID and are not claimed as Canon — this
-  table makes that explicit instead of leaving it implicit.
+  correctly have **no** semantic ID and are not claimed as Canon. Their
+  current details are intentionally not copied here: configure `adapter/` and
+  read `build/generated/host_operations.generated.md`, the projection of the
+  machine-readable registry.
 - The one open item is not an identity/drift bug: which RTTI call produces
   player-position data (`FixedPoint` vs `Vector4`) is a live-runtime
   question, not a semantic-authority question — tracked in the
