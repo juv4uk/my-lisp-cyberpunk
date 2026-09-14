@@ -64,5 +64,5 @@ UI не створює Lisp interpreter і не вирішує game policy.
 Перед новим етапом інтеграції додай сюди джерело, версію гри/фреймворку,
 конкретний verified finding і посилання на executable witness або live log.
 
-Повний аудит поточного покриття та витягнуті правила: 
+Повний аудит поточного покриття та витягнуті правила:
 [`documentation-audit.md`](research/documentation-audit.md).
