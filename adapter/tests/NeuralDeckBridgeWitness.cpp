@@ -1,10 +1,25 @@
 #include "NeuralDeckBridge.hpp"
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
 void Check(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
+
+struct RttiNameProbe {
+    const char* requested = nullptr;
+    void* GetClass(const char* name) {
+        requested = name;
+        return std::strcmp(name, "gameuiGameSystemUI") == 0 ? this : nullptr;
+    }
+};
+
+bool VerifyUiSystemRttiLookup() {
+    RttiNameProbe probe;
+    return neuraldeck::LookupUiSystemClass(probe) == &probe &&
+           std::strcmp(probe.requested, "gameuiGameSystemUI") == 0;
+}
 
 // A test double of the engine boundary, not a second implementation of the bridge.
 struct Engine {
@@ -22,7 +37,7 @@ struct Engine {
         Class* GetClass(const char* name) {
             if (std::string(name) == "NeuralDeckToggleEvent")
                 return owner->failure == 2 ? nullptr : &owner->eventClass;
-            Check(std::string(name) == "UISystem", "wrong engine class");
+            Check(std::string(name) == neuraldeck::kUiSystemRttiName, "wrong engine class");
             return owner->failure == 3 ? nullptr : &owner->uiClass;
         }
     } registry{this};
@@ -59,7 +74,7 @@ struct Engine {
 
     bool HasRtti() { rtti = Rtti(); return rtti != nullptr; }
     bool HasToggleEventClass() { selectedEventClass = rtti->GetClass("NeuralDeckToggleEvent"); return selectedEventClass != nullptr; }
-    bool HasUiSystemClass() { selectedUiClass = rtti->GetClass("UISystem"); return selectedUiClass != nullptr; }
+    bool HasUiSystemClass() { selectedUiClass = neuraldeck::LookupUiSystemClass(*rtti); return selectedUiClass != nullptr; }
     bool HasQueueEventMethod() { queueEvent = selectedUiClass->GetFunction("QueueEvent"); return queueEvent != nullptr; }
     bool GetUiSystem() { return GetUiSystem(uiSystem); }
     bool HasUiSystemHandle() const { return static_cast<bool>(uiSystem); }
@@ -71,6 +86,7 @@ struct Engine {
 
 int main() {
     try {
+        Check(VerifyUiSystemRttiLookup(), "NeuralDeck UISystem RTTI lookup used the wrong class name");
         const char* reasons[] = {
             "submitted: QueueEvent call succeeded; UI receipt not yet confirmed",
             "rejected: RTTI unavailable",

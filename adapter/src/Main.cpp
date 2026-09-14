@@ -264,7 +264,7 @@ struct Red4extNeuralDeckEngine
 
     bool HasRtti() { rtti = RED4ext::CRTTISystem::Get(); return rtti != nullptr; }
     bool HasToggleEventClass() { eventClass = rtti->GetClass("NeuralDeckToggleEvent"); return eventClass != nullptr; }
-    bool HasUiSystemClass() { uiClass = rtti->GetClass("UISystem"); return uiClass != nullptr; }
+    bool HasUiSystemClass() { uiClass = neuraldeck::LookupUiSystemClass(*rtti); return uiClass != nullptr; }
     bool HasQueueEventMethod() { queueEvent = uiClass->GetFunction("QueueEvent"); return queueEvent != nullptr; }
     bool GetUiSystem()
     {

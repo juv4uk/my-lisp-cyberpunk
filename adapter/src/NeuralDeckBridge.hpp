@@ -2,6 +2,13 @@
 
 namespace neuraldeck
 {
+inline constexpr const char* kUiSystemRttiName = "gameuiGameSystemUI";
+
+template <typename Rtti>
+auto LookupUiSystemClass(Rtti& rtti)
+{
+    return rtti.GetClass(kUiSystemRttiName);
+}
 
 template <typename Engine>
 const char* QueueToggle(Engine& engine)
