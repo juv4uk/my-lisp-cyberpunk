@@ -86,6 +86,11 @@ add_executable(
 )
 
 add_executable(
+  my-lisp-cyberpunk-adapter-runtime-state-witness
+  ../tests/AdapterRuntimeStateWitness.cpp
+)
+
+add_executable(
   my-lisp-cyberpunk-neuraldeck-repl-witness
   ../tests/NeuralDeckReplWitness.cpp
 )
@@ -114,6 +119,12 @@ target_include_directories(
 )
 
 target_include_directories(
+  my-lisp-cyberpunk-adapter-runtime-state-witness
+  PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+target_include_directories(
   my-lisp-cyberpunk-neuraldeck-repl-witness
   PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -136,6 +147,7 @@ target_link_libraries(my-lisp-cyberpunk-local-repl-server-witness PRIVATE ws2_32
 if(MSVC)
   target_compile_options(my-lisp-cyberpunk-local-repl-queue-witness PRIVATE /utf-8)
   target_compile_options(my-lisp-cyberpunk-neuraldeck-state-witness PRIVATE /utf-8)
+  target_compile_options(my-lisp-cyberpunk-adapter-runtime-state-witness PRIVATE /utf-8)
   target_compile_options(my-lisp-cyberpunk-neuraldeck-repl-witness PRIVATE /utf-8)
   target_compile_options(my-lisp-cyberpunk-cml-aot-dispatch-witness PRIVATE /utf-8)
   target_compile_options(my-lisp-cyberpunk-local-repl-server-witness PRIVATE /utf-8)
@@ -144,6 +156,7 @@ endif()
 if(BUILD_TESTING)
   add_test(NAME local-repl-queue-witness COMMAND my-lisp-cyberpunk-local-repl-queue-witness)
   add_test(NAME neuraldeck-state-witness COMMAND my-lisp-cyberpunk-neuraldeck-state-witness)
+  add_test(NAME adapter-runtime-state-witness COMMAND my-lisp-cyberpunk-adapter-runtime-state-witness)
   add_test(NAME neuraldeck-repl-witness COMMAND my-lisp-cyberpunk-neuraldeck-repl-witness)
   add_test(NAME cml-aot-dispatch-witness COMMAND my-lisp-cyberpunk-cml-aot-dispatch-witness)
   add_test(NAME local-repl-server-witness COMMAND my-lisp-cyberpunk-local-repl-server-witness)

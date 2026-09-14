@@ -14,6 +14,7 @@
 #include "generated/host_bindings.generated.hpp"
 
 #include "GameHandleTable.hpp"
+#include "AdapterRuntimeState.hpp"
 #include "LocalReplQueue.hpp"
 #include "LocalReplServer.hpp"
 #include "NeuralDeckBridge.hpp"
@@ -62,6 +63,7 @@ uint64_t g_wordNil = 0;
 uint64_t g_wordTrue = 0;
 GameHandleTable g_gameHandles;
 GameHandleTable::Token g_playerToken = 0;
+adapter_runtime_state::RuntimeState g_runtimeState;
 std::string g_dispatchSource;
 local_repl::RequestQueue g_replRequests;
 local_repl::LocalReplServer g_replServer;
@@ -82,11 +84,9 @@ int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
         return 3;
     }
 
-    static bool loggedOnce = false;
-    if (!loggedOnce)
+    if (g_runtimeState.ShouldLogCapability())
     {
         g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: Lisp host primitive запиши-лог invoked");
-        loggedOnce = true;
     }
     *out = g_wordNil;
     return 0;
@@ -155,14 +155,11 @@ int32_t PlayerPresentPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
         g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: bound current player as opaque token=%zu",
                          static_cast<std::size_t>(nextToken));
     }
-    static int8_t loggedPresent = -1;
-    const int8_t presentAsInt8 = present ? 1 : 0;
-    if (presentAsInt8 != loggedPresent)
+    if (g_runtimeState.PlayerPresenceChanged(present))
     {
         g_logger->InfoF(g_pluginHandle,
                          "my-lisp-cyberpunk: Lisp host primitive гравець-присутній? invoked, present=%s",
                          present ? "true" : "false");
-        loggedPresent = presentAsInt8;
     }
     *out = present ? g_wordTrue : g_wordNil;
     return 0;
@@ -538,6 +535,7 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
     case RED4ext::v1::EMainReason::Unload:
     {
         g_replServer.Stop();
+        g_runtimeState.ResetForUnload();
         g_dispatchSource.clear();
         g_lastDispatchResult.clear();
         g_playerToken = 0;
