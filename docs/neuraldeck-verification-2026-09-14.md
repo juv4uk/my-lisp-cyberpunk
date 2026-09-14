@@ -79,3 +79,19 @@ being misreported as player-visible success.
 3. Read the newest `red4ext/logs/my-lisp-cyberpunk-plugin-*.log`.
 4. If the panel is absent, use the exact rejected stage in that log as the
    next defect boundary; do not guess or change unrelated code.
+
+## Runtime log contract
+
+The adapter logs state transitions and user-visible boundaries, never every
+frame. A fresh launch should contain these useful records:
+
+```text
+WSM host ABI validated version=1 features=... required=...
+loaded dispatch source file=... bytes=...
+entered Running state; fixed dispatch bytes=...; NeuralDeck hotkey=F10
+NeuralDeck F10 edge vk=121 event=NeuralDeckToggleEvent ui-rtti=gameuiGameSystemUI outcome=...
+```
+
+The final record is emitted once per physical F10 press. `outcome` identifies
+the first failed boundary, or states that `UISystem.QueueEvent` accepted the
+typed event. This keeps the log small while making a failed live run actionable.

@@ -300,8 +300,34 @@ void PollNeuralDeckToggle()
 
     if (g_logger != nullptr)
     {
-        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: F10 NeuralDeck event %s", outcome);
+        // This is emitted only on a key edge, never per frame.  Keep every
+        // identity required to diagnose a live UI failure in the one record.
+        g_logger->InfoF(g_pluginHandle,
+                         "my-lisp-cyberpunk: NeuralDeck F10 edge vk=%u event=NeuralDeckToggleEvent "
+                         "ui-rtti=%s outcome=%s",
+                         static_cast<unsigned>(VK_F10), neuraldeck::kUiSystemRttiName, outcome);
     }
+}
+
+bool OnRunningEnter(RED4ext::CGameApplication*)
+{
+    if (g_logger != nullptr)
+    {
+        g_logger->InfoF(g_pluginHandle,
+                         "my-lisp-cyberpunk: entered Running state; fixed dispatch bytes=%zu; "
+                         "NeuralDeck hotkey=F10",
+                         g_dispatchSource.size());
+    }
+    return true;
+}
+
+bool OnRunningExit(RED4ext::CGameApplication*)
+{
+    if (g_logger != nullptr)
+    {
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: left Running state");
+    }
+    return true;
 }
 
 bool DispatchRunningTick(RED4ext::CGameApplication*)
@@ -377,8 +403,10 @@ bool LoadDispatchSource(std::string& out)
     }
     if (g_logger != nullptr)
     {
-        // Log which spelling was found (UTF-8 path via u8string where available).
-        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: loaded dispatch source from scripts/");
+        const auto name = used.filename().u8string();
+        g_logger->InfoF(g_pluginHandle,
+                         "my-lisp-cyberpunk: loaded dispatch source file=%.*s bytes=%zu",
+                         static_cast<int>(name.size()), reinterpret_cast<const char*>(name.data()), out.size());
     }
     return true;
 }
@@ -415,6 +443,10 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
             logger->ErrorF(aHandle, "my-lisp-cyberpunk: incompatible WSM host ABI");
             return false;
         }
+        logger->InfoF(aHandle,
+                      "my-lisp-cyberpunk: WSM host ABI validated version=%u features=0x%llX required=0x%llX",
+                      static_cast<unsigned>(abiVersion()), static_cast<unsigned long long>(featureBits()),
+                      static_cast<unsigned long long>(kRequiredHostFeatures));
         auto sessionInit =
             reinterpret_cast<WsmSessionInitFn>(GetProcAddress(wsmModule, "wsm_session_init"));
         if (sessionInit == nullptr)
@@ -502,9 +534,9 @@ RED4EXT_C_EXPORT bool RED4EXT_CALL Main(RED4ext::v1::PluginHandle aHandle, RED4e
         }
 
         RED4ext::v1::GameState runningState{};
-        runningState.OnEnter = nullptr;
+        runningState.OnEnter = &OnRunningEnter;
         runningState.OnUpdate = &DispatchRunningTick;
-        runningState.OnExit = nullptr;
+        runningState.OnExit = &OnRunningExit;
         aSdk->gameStates->Add(aHandle, RED4ext::EGameStateType::Running, &runningState);
 
         g_wsmModule = wsmModule;
