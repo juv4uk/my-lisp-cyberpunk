@@ -1,3 +1,4 @@
+#include "NeuralDeckInput.hpp"
 #include "NeuralDeckState.hpp"
 
 #include <iostream>
@@ -18,5 +19,13 @@ int main()
 
     deck.Close();
     deck.ClearTranscript();
-    return !deck.IsOpen() && deck.Transcript().empty() ? 0 : 6;
+    if (deck.IsOpen() || !deck.Transcript().empty()) return 6;
+
+    neuraldeck::InputController input;
+    if (!input.HandleKey(neuraldeck::Key::F10, true, deck) || !deck.IsOpen()) return 7;
+    if (input.HandleKey(neuraldeck::Key::F10, true, deck) || !deck.IsOpen()) return 8;
+    if (input.HandleKey(neuraldeck::Key::Tab, true, deck) || !deck.IsOpen()) return 9;
+    if (input.HandleKey(neuraldeck::Key::F10, false, deck)) return 10;
+    if (!input.HandleKey(neuraldeck::Key::F10, true, deck) || deck.IsOpen()) return 11;
+    return 0;
 }

@@ -15,6 +15,7 @@
 #include "GameHandleTable.hpp"
 #include "LocalReplQueue.hpp"
 #include "LocalReplServer.hpp"
+#include "NeuralDeckInput.hpp"
 #include "PlayerHandleEpoch.hpp"
 #include "SurfaceExt.hpp"
 
@@ -63,6 +64,8 @@ GameHandleTable::Token g_playerToken = 0;
 std::string g_dispatchSource;
 local_repl::RequestQueue g_replRequests;
 local_repl::LocalReplServer g_replServer;
+neuraldeck::State g_neuralDeck;
+neuraldeck::InputController g_neuralDeckInput;
 
 int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
@@ -251,8 +254,24 @@ private:
 
 std::string g_lastDispatchResult;
 
+void PollNeuralDeckToggle()
+{
+    const bool f10Down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+    if (!g_neuralDeckInput.HandleKey(neuraldeck::Key::F10, f10Down, g_neuralDeck))
+    {
+        return;
+    }
+    if (g_logger != nullptr)
+    {
+        g_logger->InfoF(g_pluginHandle,
+                         "my-lisp-cyberpunk: NeuralDeck %s",
+                         g_neuralDeck.IsOpen() ? "opened" : "closed");
+    }
+}
+
 bool DispatchRunningTick(RED4ext::CGameApplication*)
 {
+    PollNeuralDeckToggle();
     if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr || g_logger == nullptr)
     {
         return true;

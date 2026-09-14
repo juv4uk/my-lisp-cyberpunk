@@ -3,8 +3,8 @@
 ## Product decision
 
 NeuralDeck is the primary REPL surface for Cyberpunk 2077. It is an in-game,
-Cyberpunk-styled terminal, opened by a configurable hotkey. It is not a TCP
-client and does not create a second Lisp session.
+Cyberpunk-styled terminal, toggled by `F10`. It is not a TCP client and does
+not create a second Lisp session.
 
 ```text
 hotkey
@@ -24,10 +24,10 @@ NeuralDeck is visible to the loaded dispatcher and later NeuralDeck commands.
 
 | Input | Meaning |
 | --- | --- |
-| configurable hotkey | open or close NeuralDeck |
+| F10 | open or close NeuralDeck; the game continues running |
 | Enter | submit the current complete UTF-8 form |
 | Up / Down | move through local command history |
-| Esc | close without evaluating the input buffer |
+| Tab | remains a game key; it never closes NeuralDeck |
 | Ctrl+L | clear visible transcript only |
 
 The first visual composition is intentionally small: a translucent dark panel,
