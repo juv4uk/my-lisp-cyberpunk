@@ -255,45 +255,37 @@ std::string g_lastDispatchResult;
 
 // Hardware input is a host fact. The C++ adapter only turns its F10 edge into
 // a typed UI event; compiled Redscript owns the popup lifecycle and visuals.
-bool QueueNeuralDeckToggleEvent()
+const char* QueueNeuralDeckToggleEvent()
 {
     auto* rtti = RED4ext::CRTTISystem::Get();
-    if (rtti == nullptr)
-    {
-        return false;
-    }
+    if (rtti == nullptr) return "rejected: RTTI unavailable";
 
     auto* eventClass = rtti->GetClass("NeuralDeckToggleEvent");
+    if (eventClass == nullptr) return "rejected: NeuralDeckToggleEvent class missing";
     auto* uiClass = rtti->GetClass("UISystem");
-    if (eventClass == nullptr || uiClass == nullptr)
-    {
-        return false;
-    }
-
+    if (uiClass == nullptr) return "rejected: UISystem class missing";
     auto* queueEvent = uiClass->GetFunction("QueueEvent");
-    if (queueEvent == nullptr)
-    {
-        return false;
-    }
+    if (queueEvent == nullptr) return "rejected: UISystem.QueueEvent method missing";
 
     RED4ext::ScriptGameInstance gameInstance;
     RED4ext::Handle<RED4ext::IScriptable> uiSystem;
-    if (!RED4ext::ExecuteFunction("ScriptGameInstance", "GetUISystem", &uiSystem, &gameInstance) || !uiSystem)
-    {
-        return false;
-    }
+    if (!RED4ext::ExecuteFunction("ScriptGameInstance", "GetUISystem", &uiSystem, &gameInstance))
+        return "rejected: GetUISystem execution failed";
+    if (!uiSystem) return "rejected: GetUISystem returned empty handle";
 
     auto* rawEvent = static_cast<RED4ext::IScriptable*>(eventClass->CreateInstance());
-    if (rawEvent == nullptr)
-    {
-        return false;
-    }
+    if (rawEvent == nullptr) return "rejected: event allocation failed";
     RED4ext::Handle<RED4ext::IScriptable> event(rawEvent);
     RED4ext::StackArgs_t args;
     args.emplace_back(nullptr, &event);
-    return RED4ext::ExecuteFunction(uiSystem.instance, queueEvent, nullptr, args);
+    // ExecuteFunction rejects a missing output slot for a non-void function.
+    // Diagnose the contract before invoking it; never guess the return layout.
+    if (queueEvent->returnType != nullptr)
+        return "rejected: QueueEvent has unexpected non-void return type";
+    return RED4ext::ExecuteFunction(uiSystem.instance, queueEvent, nullptr, args)
+        ? "submitted: QueueEvent call succeeded; UI receipt not yet confirmed"
+        : "rejected: QueueEvent execution failed";
 }
-
 void PollNeuralDeckToggle()
 {
     const bool f10Down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
@@ -304,10 +296,10 @@ void PollNeuralDeckToggle()
         return;
     }
 
-    const bool queued = QueueNeuralDeckToggleEvent();
+    const char* outcome = QueueNeuralDeckToggleEvent();
     if (g_logger != nullptr)
     {
-        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: F10 NeuralDeck event %s", queued ? "queued" : "not queued");
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: F10 NeuralDeck event %s", outcome);
     }
 }
 
