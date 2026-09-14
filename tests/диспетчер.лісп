@@ -1,0 +1,31 @@
+; Run from repository root with canonical my-lisp.
+; Host doubles below supply facts only. The production dispatcher is read from disk.
+(визначити перевірити
+  (функція (назва результат очікувано)
+    (cond
+      ((equal? результат очікувано) t)
+      (t (car назва)))))
+
+(визначити програма (car (read-all (read-file "scripts/dispatcher.lisp"))))
+
+; Any class lookup without a player must fail, even if its result is discarded.
+(визначити гравець-присутній? (функція () (quote ())))
+(визначити клас (функція (обʼєкт) (car "Заборонений виклик класу без гравця")))
+(перевірити "Гравець відсутній" (eval програма) (quote ()))
+
+(визначити гравець (quote перший))
+(визначити гравець-присутній? (функція () t))
+(визначити клас (функція (обʼєкт)
+  (cond
+    ((equal? обʼєкт (quote перший)) "PlayerPuppet-A")
+    ((equal? обʼєкт (quote другий)) "PlayerPuppet-B")
+    (t (car "Невідомий тестовий обʼєкт")))))
+(перевірити "Поява гравця" (eval програма) "PlayerPuppet-A")
+(перевірити "Повторний кадр" (eval програма) "PlayerPuppet-A")
+
+(визначити гравець (quote другий))
+(перевірити "Заміна гравця" (eval програма) "PlayerPuppet-B")
+
+(визначити гравець-присутній? (функція () (quote ())))
+(визначити клас (функція (обʼєкт) (car "Клас викликано після зникнення гравця")))
+(перевірити "Зникнення гравця" (eval програма) (quote ()))
