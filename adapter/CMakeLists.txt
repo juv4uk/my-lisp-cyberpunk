@@ -48,6 +48,12 @@ if(BUILD_TESTING)
   add_test(NAME host-bindings-registry-mutation COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostBindings.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostBindingsRegistryTest.cmake)
   add_test(NAME canon-spelling-guard COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../host-runtime/src/eval.rs -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCanonSpellings.cmake)
   add_test(NAME canon-spelling-guard-mutation COMMAND ${CMAKE_COMMAND} -DGUARD=${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCanonSpellings.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/CanonSpellingGuardTest.cmake)
+  add_test(
+    NAME neuraldeck-redscript-contract
+    COMMAND ${CMAKE_COMMAND}
+      -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../redscript/NeuralDeck/NeuralDeckOverlay.reds
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/NeuralDeckRedscriptContractTest.cmake
+  )
 endif()
 
 add_subdirectory(src)
