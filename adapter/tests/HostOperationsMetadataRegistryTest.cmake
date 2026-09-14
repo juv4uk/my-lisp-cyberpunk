@@ -14,4 +14,15 @@ execute_process(
 if(rc EQUAL 0)
   message(FATAL_ERROR "registry accepted an operation without owner metadata")
 endif()
+
+file(WRITE "${work}/invalid-effect.lisp" "(host-operations/2\n  (cp:0001 (semantic-id none) (surface uk log) (arity 0) (effect execute-anything) (input none) (result nil) (owner cyberpunk-host) (ffi LogPrimitive) (status live) (evidence vertical-slice))\n)\n")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -DINPUT=${work}/invalid-effect.lisp -DOUTPUT=${work}/invalid-effect.hpp -P "${GENERATOR}"
+  RESULT_VARIABLE rc
+  OUTPUT_VARIABLE stdout
+  ERROR_VARIABLE stderr
+)
+if(rc EQUAL 0)
+  message(FATAL_ERROR "registry accepted an unknown effect")
+endif()
 message(STATUS "host operation registry rejects missing mandatory metadata")
