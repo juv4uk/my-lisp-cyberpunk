@@ -261,6 +261,7 @@ fn eval_str(session: &mut Session, text: &str) -> String {
             }
             Err(EvalError::NotCallable) => "error: not callable".to_string(),
             Err(EvalError::InvalidForm(message)) => format!("error: invalid form: {message}"),
+            Err(EvalError::TypeError(message)) => format!("error: type error: {message}"),
             Err(EvalError::HostPrimitiveFailed { name, message }) => {
                 format!("error: {name} failed: {message}")
             }
@@ -925,7 +926,7 @@ mod tests {
     }
 
     #[test]
-    fn malformed_special_forms_return_errors_without_terminating_the_session() {
+    fn malformed_forms_and_checked_accessors_return_errors_without_terminating_the_session() {
         unsafe {
             let session = wsm_session_init();
 
@@ -937,6 +938,26 @@ mod tests {
                 (
                     "(cond (t 1 2))",
                     "error: invalid form: cond clause takes exactly two forms",
+                ),
+                (
+                    "(car 5)",
+                    "error: type error: car expects a non-empty list",
+                ),
+                (
+                    "(перше (quote ()))",
+                    "error: type error: car expects a non-empty list",
+                ),
+                (
+                    "(решта 5)",
+                    "error: type error: cdr expects a non-empty list",
+                ),
+                (
+                    "(перше (quote (7 8)))",
+                    "7",
+                ),
+                (
+                    "(решта (quote (7 8)))",
+                    "(8)",
                 ),
             ] {
                 let source = CString::new(source).unwrap();

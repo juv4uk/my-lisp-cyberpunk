@@ -56,6 +56,9 @@ pub enum EvalError {
     /// Спеціальна форма має неправильну структурну арність. Embedded host
     /// повертає Lisp-помилку до звернення до raw WSM accessors.
     InvalidForm(String),
+    /// Canon car/cdr require a non-empty pair. The checked evaluator
+    /// reports this before calling the raw nucleus accessor.
+    TypeError(String),
     /// A registered host primitive reported failure. Carries the
     /// primitive's name and a host-supplied message, so a host-reported
     /// error surfaces as a real error instead of silently becoming Nil
@@ -135,6 +138,12 @@ fn eval_list(word: u64, env: &Env, symbols: &SymbolTable) -> Result<u64, EvalErr
         // against my-lisp's own §3 example, which uses `(quote ...)` directly.
         return single_argument(rest, "quote");
     }
+    if is_car_spelling(name) {
+        return eval_checked_accessor(rest, env, symbols, "car", wsm_car);
+    }
+    if is_cdr_spelling(name) {
+        return eval_checked_accessor(rest, env, symbols, "cdr", wsm_cdr);
+    }
 
     let args = eval_args(rest, env, symbols)?;
     match env.primitives.get(name) {
@@ -170,6 +179,29 @@ include!(concat!(env!("OUT_DIR"), "/canon_spellings.rs"));
 
 fn is_quote_spelling(name: &str) -> bool {
     QUOTE_SPELLINGS.contains(&name)
+}
+
+fn is_car_spelling(name: &str) -> bool {
+    CAR_SPELLINGS.contains(&name)
+}
+
+fn is_cdr_spelling(name: &str) -> bool {
+    CDR_SPELLINGS.contains(&name)
+}
+
+fn eval_checked_accessor(
+    list: u64,
+    env: &Env,
+    symbols: &SymbolTable,
+    canonical_name: &str,
+    accessor: unsafe extern "C" fn(*mut core::ffi::c_void, u64) -> u64,
+) -> Result<u64, EvalError> {
+    let argument = single_argument(list, canonical_name)?;
+    let value = eval(argument, env, symbols)?;
+    if tag_of(value) != TAG_CONS {
+        return Err(EvalError::TypeError(format!("{canonical_name} expects a non-empty list")));
+    }
+    Ok(unsafe { accessor(core::ptr::null_mut(), value) })
 }
 
 fn is_cond_spelling(name: &str) -> bool {
