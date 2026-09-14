@@ -1,6 +1,10 @@
 import Codeware.*
 import Codeware.UI.*
 
+// Produced by the thin C++ input adapter and delivered through UISystem.QueueEvent.
+// It carries no policy and has no Lisp semantics.
+public class NeuralDeckToggleEvent extends Event {}
+
 // Presentation only. It has no evaluator, host capability or policy.
 public class NeuralDeckOverlay extends CustomPopup {
     public func GetQueueName() -> CName {
@@ -83,30 +87,12 @@ public class NeuralDeckOverlay extends CustomPopup {
 // The service registers its hotkey only when the game instance is initialized.
 public class NeuralDeckService extends ScriptableService {
     private let m_overlay: ref<NeuralDeckOverlay>;
-    private let m_hotkey: ref<CallbackSystemHandler>;
-
-    private cb func OnInitialize() {
-        this.m_hotkey = GameInstance.GetCallbackSystem()
-            .RegisterCallback(n"Input/Key", this, n"OnNeuralDeckHotkey")
-            .AddTarget(InputTarget.Key(EInputKey.IK_F10, EInputAction.IACT_Press));
-    }
 
     private cb func OnUninitialize() {
-        if IsDefined(this.m_hotkey) {
-            this.m_hotkey.Unregister();
-            this.m_hotkey = null;
-        }
         this.m_overlay = null;
     }
 
-    private cb func OnNeuralDeckHotkey(event: ref<KeyInputEvent>) {
-        // InputTarget already selects only IK_F10 + IACT_Press. Keeping the
-        // callback branch-free also avoids enum comparison operators that are
-        // absent from the game's Redscript surface.
-        this.ToggleOverlay();
-    }
-
-    private func ToggleOverlay() {
+    public func ToggleOverlay() {
         if IsDefined(this.m_overlay) {
             this.m_overlay.Close();
             return;
@@ -127,4 +113,18 @@ public class NeuralDeckService extends ScriptableService {
         }
     }
 
+}
+
+// Codeware already uses this exact UISystem event pattern for its popup events.
+// The event method owns presentation only; Lisp remains outside this layer.
+@addMethod(PopupsManager)
+protected cb func OnNeuralDeckToggle(evt: ref<NeuralDeckToggleEvent>) -> Bool {
+    let service = GameInstance.GetScriptableServiceContainer()
+        .GetService(n"NeuralDeckService") as NeuralDeckService;
+    if !IsDefined(service) {
+        return false;
+    }
+
+    service.ToggleOverlay();
+    return true;
 }

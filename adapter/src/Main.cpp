@@ -6,6 +6,7 @@
 
 #include <RED4ext/RED4ext.hpp>
 #include <RED4ext/Scripting/Natives/ScriptGameInstance.hpp>
+#include <RED4ext/Scripting/Utils.hpp>
 
 #include <windows.h>
 
@@ -63,6 +64,7 @@ GameHandleTable::Token g_playerToken = 0;
 std::string g_dispatchSource;
 local_repl::RequestQueue g_replRequests;
 local_repl::LocalReplServer g_replServer;
+bool g_neuralDeckF10Down = false;
 
 int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
@@ -251,8 +253,67 @@ private:
 
 std::string g_lastDispatchResult;
 
+// Hardware input is a host fact. The C++ adapter only turns its F10 edge into
+// a typed UI event; compiled Redscript owns the popup lifecycle and visuals.
+bool QueueNeuralDeckToggleEvent()
+{
+    auto* rtti = RED4ext::CRTTISystem::Get();
+    if (rtti == nullptr)
+    {
+        return false;
+    }
+
+    auto* eventClass = rtti->GetClass("NeuralDeckToggleEvent");
+    auto* uiClass = rtti->GetClass("UISystem");
+    if (eventClass == nullptr || uiClass == nullptr)
+    {
+        return false;
+    }
+
+    auto* queueEvent = uiClass->GetFunction("QueueEvent");
+    if (queueEvent == nullptr)
+    {
+        return false;
+    }
+
+    RED4ext::ScriptGameInstance gameInstance;
+    RED4ext::Handle<RED4ext::IScriptable> uiSystem;
+    if (!RED4ext::ExecuteFunction("ScriptGameInstance", "GetUISystem", &uiSystem, &gameInstance) || !uiSystem)
+    {
+        return false;
+    }
+
+    auto* rawEvent = static_cast<RED4ext::IScriptable*>(eventClass->CreateInstance());
+    if (rawEvent == nullptr)
+    {
+        return false;
+    }
+    RED4ext::Handle<RED4ext::IScriptable> event(rawEvent);
+    RED4ext::StackArgs_t args;
+    args.emplace_back(nullptr, &event);
+    return RED4ext::ExecuteFunction(uiSystem.instance, queueEvent, nullptr, args);
+}
+
+void PollNeuralDeckToggle()
+{
+    const bool f10Down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
+    const bool pressed = f10Down && !g_neuralDeckF10Down;
+    g_neuralDeckF10Down = f10Down;
+    if (!pressed)
+    {
+        return;
+    }
+
+    const bool queued = QueueNeuralDeckToggleEvent();
+    if (g_logger != nullptr)
+    {
+        g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: F10 NeuralDeck event %s", queued ? "queued" : "not queued");
+    }
+}
+
 bool DispatchRunningTick(RED4ext::CGameApplication*)
 {
+    PollNeuralDeckToggle();
     if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr || g_logger == nullptr)
     {
         return true;
