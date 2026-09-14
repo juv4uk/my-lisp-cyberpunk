@@ -43,6 +43,16 @@ add_custom_command(
     "$<TARGET_FILE_DIR:my-lisp-cyberpunk-plugin>/scripts"
 )
 
+# The visible NeuralDeck is a redscript/Codeware presentation layer.  Stage it
+# with the DLL so a deployment has one complete, reproducible plugin payload.
+add_custom_command(
+  TARGET my-lisp-cyberpunk-plugin
+  POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../redscript"
+    "$<TARGET_FILE_DIR:my-lisp-cyberpunk-plugin>/redscript"
+)
+
 
 add_executable(
   my-lisp-cyberpunk-dispatch-witness

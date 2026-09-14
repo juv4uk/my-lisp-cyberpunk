@@ -31,9 +31,11 @@ NeuralDeck is visible to the loaded dispatcher and later NeuralDeck commands.
 | Ctrl+L | clear visible transcript only |
 
 The first visual composition is intentionally small: a translucent dark panel,
-cyan and magenta frame accents, a `my-lisp // neuraldeck` header, a scrollable
-transcript and a single input line. It uses the game’s ink UI/input path so it
-appears inside the running game and receives focus there.
+Cyberpunk-red frame accents, a `my-lisp // neuraldeck` header and an explicit
+status line. It uses the game’s ink UI path and is deliberately non-blocking:
+it does not set time dilation, open a radial-menu context, take the cursor, or
+consume `Tab`. The canonical input and transcript controls follow once the
+canonical session bridge is available.
 
 ## Thread and authority rules
 
@@ -46,8 +48,9 @@ appears inside the running game and receives focus there.
   and monotonic sequence number.
 - The UI reads transcript records on the game thread and renders them. It does
   not call the evaluator itself.
-- C++/RED4ext supplies input, rendering and host mechanisms. `.lisp` chooses
-  all game behavior after a form is evaluated.
+- Redscript/Codeware supplies the F10 input and ink presentation; C++/RED4ext
+  supplies only the host mechanisms and game-thread Lisp boundary. `.lisp`
+  chooses all game behavior after a form is evaluated.
 
 ## Delivery order
 
@@ -57,9 +60,11 @@ appears inside the running game and receives focus there.
    session; prove definitions and host mechanisms in one game session.
 3. Add the in-process `NeuralDeckQueue` and transcript model. This replaces
    TCP as the primary interactive transport.
-4. Add a RED4ext input hook with a configurable hotkey and a testable toggle
-   state machine.
-5. Add the ink overlay and bind it to the queue and transcript.
+4. Add a Codeware `Input/Key` callback for F10 and a testable toggle lifecycle.
+   **In progress:** the former C++ polling/RTTI bridge was rejected because it
+   cannot invoke compiled Redscript functions.
+5. Add the non-blocking ink overlay. **In progress:** `CustomPopup` provides
+   the panel; live F10 evidence is required before this step is complete.
 6. Capture a live game witness: open, define, call the definition, inspect the
    player class, submit malformed source, and continue successfully.
 
