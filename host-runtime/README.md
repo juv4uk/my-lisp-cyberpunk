@@ -35,3 +35,10 @@ Cdylib export name remains `wsm_my_lisp_cyberpunk_dll` so existing
 - `external/my-lisp` — submodule for `semantic-registry.wsm` at build time
 
 See [MIGRATION.md](MIGRATION.md).
+
+## Embedded safety
+
+The raw WSM nucleus is a machine-layer ABI.  User Lisp crosses a checked
+reader/evaluator boundary before it can reach that layer; malformed forms
+return an `error:` result and preserve the session.  The full contract and its
+subprocess regression witness are in [docs/safe-eval-boundary.md](../docs/safe-eval-boundary.md).
