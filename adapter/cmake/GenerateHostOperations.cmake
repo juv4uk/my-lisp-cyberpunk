@@ -2,13 +2,16 @@
 # Registry data, rather than C++ spelling literals, is the authority for
 # local host-operation IDs and public surfaces.
 file(READ "${INPUT}" source)
+if(NOT source MATCHES "\\(host-operations/2")
+  message(FATAL_ERROR "host operation registry must declare host-operations/2: ${INPUT}")
+endif()
 string(REGEX MATCHALL "\\(cp:[^ \\r\\n)]*" declared_ids "${source}")
 foreach(declared_id IN LISTS declared_ids)
   if(NOT declared_id MATCHES "^\\(cp:[0-9][0-9][0-9][0-9]$")
     message(FATAL_ERROR "host operation registry has unknown ID format: ${declared_id}")
   endif()
 endforeach()
-string(REGEX MATCHALL "\\(cp:[0-9][0-9][0-9][0-9] \\(surface uk [^)]+\\) \\(arity [0-9]+\\) \\(effect [^)]+\\) \\(result [^)]+\\)\\)" entries "${source}")
+string(REGEX MATCHALL "\\(cp:[0-9][0-9][0-9][0-9] \\(semantic-id [^)]+\\) \\(surface uk [^)]+\\) \\(arity [0-9]+\\) \\(effect [^)]+\\) \\(input [^)]+\\) \\(result [^)]+\\) \\(owner [^)]+\\) \\(ffi [^)]+\\) \\(status [^)]+\\) \\(evidence [^)]+\\)\\)" entries "${source}")
 if(NOT entries)
   message(FATAL_ERROR "host operation registry has no valid entries: ${INPUT}")
 endif()
