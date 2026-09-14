@@ -8,22 +8,39 @@ build, не гіпотетичний план.
 
 RED4ext і сама гра встановлені один раз (`red4ext/RED4ext.dll` +
 `bin/x64/winmm.dll`) і не потребують повторної дії. Після кожного
-`cmake --build adapter/build --config Release` треба оновити **три**
-речі в `<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin/`, не
-лише dll-файли:
+`cmake --build adapter/build --config Release` треба оновити **чотири**
+частини payload, не лише DLL-файли:
 
 1. `my-lisp-cyberpunk-plugin.dll` (з `adapter/build/src/Release/`)
 2. `wsm_my_lisp_cyberpunk_dll.dll` — **тепер з `host-runtime/target/release/`**, не з сусіднього `wsm-my-lisp` checkout (host-runtime мігрував сюди 2026-09-11, `wsm-my-lisp#15` Phase C; див. `host-runtime/MIGRATION.md`)
-3. **`scripts/` — уся папка**, не лише окремий файл (з `my-lisp-cyberpunk/scripts/*.lisp`)
+3. **`scripts/` — уся папка**, не лише окремий файл (з `adapter/build/src/Release/scripts/`)
    — забутий крок реально викликав `could not load scripts/dispatcher.lisp`
    у живому лозі (2026-09-11), не гіпотетичний ризик.
+4. **`redscript/` — уся папка** з `adapter/build/src/Release/redscript/` у
+   `<game_dir>/r6/scripts/`. Без цього гра компілює стару версію NeuralDeck,
+   навіть коли DLL уже нова.
 
 ```bash
 PLUGDIR="<game_dir>/red4ext/plugins/wsm-my-lisp-cyberpunk-plugin"
 cp adapter/build/src/Release/my-lisp-cyberpunk-plugin.dll "$PLUGDIR/"
 cp host-runtime/target/release/wsm_my_lisp_cyberpunk_dll.dll "$PLUGDIR/"
 mkdir -p "$PLUGDIR/scripts"
-cp scripts/*.lisp "$PLUGDIR/scripts/"
+cp adapter/build/src/Release/scripts/*.lisp "$PLUGDIR/scripts/"
+cp -R adapter/build/src/Release/redscript/* "<game_dir>/r6/scripts/"
+```
+
+Замість ручного копіювання використовуй один перевірюваний інсталятор. Він
+відмовиться працювати, якщо гра запущена, а після копіювання звірить SHA-256
+двох DLL:
+
+```powershell
+.\tools\Install-LocalGame.ps1 -GameDir 'D:\games\Cyberpunk 2077 v.2.31 (2020)\Cyberpunk 2077'
+```
+
+Для перегляду точного плану без копіювання:
+
+```powershell
+.\tools\Install-LocalGame.ps1 -GameDir 'D:\games\Cyberpunk 2077 v.2.31 (2020)\Cyberpunk 2077' -WhatIf
 ```
 
 DLL-файли, зайняті поточним процесом гри, неможливо перезаписати — гру
