@@ -288,8 +288,18 @@ struct Red4extNeuralDeckEngine
     bool GetUiSystem()
     {
         LogStage("GetUISystem (native ExecuteFunction call)");
+
+        // Root cause of the 2026-09-15 F10 access-violation crash (see
+        // docs/neuraldeck-f10-crash-2026-09-15.md): ExecuteFunction packs
+        // each argument onto the VM stack by the target function's real
+        // parameter type. GetUISystem expects GameInstance by value, the
+        // same as the working GetPlayer call below in
+        // PlayerPresentPrimitive -- passing &gameInstance put the address
+        // of a local variable on the argument stack instead of the value
+        // itself, which the engine then read through as if it were the
+        // struct.
         RED4ext::ScriptGameInstance gameInstance;
-        return RED4ext::ExecuteFunction("ScriptGameInstance", "GetUISystem", &uiSystem, &gameInstance);
+        return RED4ext::ExecuteFunction("ScriptGameInstance", "GetUISystem", &uiSystem, gameInstance);
     }
     bool HasUiSystemHandle() const { return uiSystem != nullptr; }
     bool CreateToggleEvent()
