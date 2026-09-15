@@ -16,8 +16,11 @@ jobs:
         working-directory: host-runtime
         run: cargo test
       - name: Configure adapter
-        run: cmake -S adapter -B adapter/build -G "Visual Studio 17 2022" -A x64
+        # windows-latest no longer guarantees a Visual Studio generator. Let
+        # CMake choose the runner-supported generator, as the verification
+        # workflow does, rather than failing before the adapter is configured.
+        run: cmake -S adapter -B adapter/build
       - name: Build adapter
-        run: cmake --build adapter/build --config Release
+        run: cmake --build adapter/build --config Release --parallel 4
       - name: Run adapter witnesses
         run: ctest --test-dir adapter/build -C Release --output-on-failure

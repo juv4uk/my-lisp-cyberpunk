@@ -262,18 +262,39 @@ struct Red4extNeuralDeckEngine
     RED4ext::Handle<RED4ext::IScriptable> uiSystem;
     RED4ext::Handle<RED4ext::IScriptable> event;
 
+    // Pre-call breadcrumbs, not post-call results: NeuralDeckBridge.hpp's
+    // QueueToggle only logs its final outcome, AFTER every step has already
+    // run. If any of the native calls below crash the process (which a raw
+    // RED4ext::ExecuteFunction/CreateInstance call into live engine state
+    // genuinely can), that final log line never fires and the incident
+    // leaves zero trace -- exactly what happened 2026-09-14 22:46: the
+    // plugin log's last line was at 22:45:33, CrashInfo.json's timeCrash
+    // was 22:46:56, and not one "F10 edge" line exists in between. Every
+    // method here that makes a native RTTI call now logs its own name
+    // immediately before making that call, so a repeat crash leaves the
+    // exact failing stage as the log's last line instead of silence.
+    static void LogStage(const char* stage)
+    {
+        if (g_logger != nullptr)
+        {
+            g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: NeuralDeck stage entering: %s", stage);
+        }
+    }
+
     bool HasRtti() { rtti = RED4ext::CRTTISystem::Get(); return rtti != nullptr; }
     bool HasToggleEventClass() { eventClass = rtti->GetClass("NeuralDeckToggleEvent"); return eventClass != nullptr; }
     bool HasUiSystemClass() { uiClass = neuraldeck::LookupUiSystemClass(*rtti); return uiClass != nullptr; }
     bool HasQueueEventMethod() { queueEvent = uiClass->GetFunction("QueueEvent"); return queueEvent != nullptr; }
     bool GetUiSystem()
     {
+        LogStage("GetUISystem (native ExecuteFunction call)");
         RED4ext::ScriptGameInstance gameInstance;
         return RED4ext::ExecuteFunction("ScriptGameInstance", "GetUISystem", &uiSystem, &gameInstance);
     }
     bool HasUiSystemHandle() const { return uiSystem != nullptr; }
     bool CreateToggleEvent()
     {
+        LogStage("CreateInstance(NeuralDeckToggleEvent)");
         auto* rawEvent = static_cast<RED4ext::IScriptable*>(eventClass->CreateInstance());
         if (rawEvent == nullptr) return false;
         event = RED4ext::Handle<RED4ext::IScriptable>(rawEvent);
@@ -282,6 +303,7 @@ struct Red4extNeuralDeckEngine
     bool QueueEventReturnsVoid() const { return queueEvent->returnType == nullptr; }
     bool SubmitToggleEvent()
     {
+        LogStage("QueueEvent (native ExecuteFunction call on live UISystem instance)");
         RED4ext::StackArgs_t args;
         args.emplace_back(nullptr, &event);
         return RED4ext::ExecuteFunction(uiSystem.instance, queueEvent, nullptr, args);
