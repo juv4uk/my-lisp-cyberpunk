@@ -39,6 +39,8 @@ hosts; they do not define an alternative Lisp language.
 | RED4ext logs | `...\red4ext\logs` |
 | my-lisp plugin logs | `...\red4ext\logs\my-lisp-cyberpunk-plugin-*.log` |
 | Redscript log | `...\r6\logs\redscript_rCURRENT.log` |
+| Game crash-report telemetry (no stack trace) | `%LOCALAPPDATA%\CD Projekt Red\Cyberpunk 2077\CrashInfo.json` |
+| Game crash dumps (real evidence: `stacktrace.txt`, `report.txt`, binary `.dmp`) | `%LOCALAPPDATA%\REDEngine\ReportQueue\Cyberpunk2077-<date>-<time>-<pid>-<tid>\` |
 
 The adapter and runtime DLL belong in the same RED4ext plugin folder because
 the adapter loads the runtime adjacent to itself. NeuralDeck `.reds` belongs
