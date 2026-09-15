@@ -17,7 +17,6 @@
 #include "AdapterRuntimeState.hpp"
 #include "LocalReplQueue.hpp"
 #include "LocalReplServer.hpp"
-#include "NeuralDeckBridge.hpp"
 #include "PlayerHandleEpoch.hpp"
 #include "SurfaceExt.hpp"
 
@@ -67,7 +66,6 @@ adapter_runtime_state::RuntimeState g_runtimeState;
 std::string g_dispatchSource;
 local_repl::RequestQueue g_replRequests;
 local_repl::LocalReplServer g_replServer;
-bool g_neuralDeckF10Down = false;
 
 int32_t LogPrimitive(std::size_t argc, const uint64_t*, uint64_t* out)
 {
@@ -251,96 +249,6 @@ private:
 
 std::string g_lastDispatchResult;
 
-// Hardware input is a host fact. The C++ adapter only detects the F10 edge
-// and calls a static Redscript entry point directly by RTTI; compiled
-// Redscript owns the popup lifecycle and visuals.
-//
-// This replaces an earlier NeuralDeckToggleEvent + UISystem.QueueEvent +
-// @addMethod(PopupsManager) design. Codeware's own CustomPopupManager
-// (github.com/psiberx/cp2077-codeware, scripts/UI/Popups/CustomPopupManager.reds)
-// only ever queues its own popup events from Redscript itself -- there is no
-// working precedent anywhere for queuing a UISystem event from native C++
-// and having PopupsManager receive it. A direct ExecuteFunction call to a
-// static function, by contrast, is exactly the already-proven shape used
-// for GetPlayer/GetUISystem below.
-struct Red4extNeuralDeckEngine
-{
-    RED4ext::CRTTISystem* rtti = nullptr;
-    RED4ext::CClass* serviceClass = nullptr;
-    RED4ext::CBaseFunction* toggleFunc = nullptr;
-
-    static void LogStage(const char* stage)
-    {
-        if (g_logger != nullptr)
-        {
-            g_logger->InfoF(g_pluginHandle, "my-lisp-cyberpunk: NeuralDeck stage entering: %s", stage);
-        }
-    }
-
-    bool HasRtti() { rtti = RED4ext::CRTTISystem::Get(); return rtti != nullptr; }
-    bool HasToggleFunction()
-    {
-        serviceClass = rtti->GetClass(neuraldeck::kToggleClassName);
-        if (serviceClass == nullptr)
-        {
-            if (g_logger != nullptr)
-            {
-                g_logger->InfoF(g_pluginHandle,
-                                 "my-lisp-cyberpunk: NeuralDeck RTTI class lookup failed for '%s'",
-                                 neuraldeck::kToggleClassName);
-            }
-            return false;
-        }
-
-        // ToggleFromNative is `public static func`. CClass keeps instance
-        // methods (funcs) and static methods (staticFuncs) in two separate
-        // arrays; GetFunction only searches funcs. Search staticFuncs by
-        // shortName directly.
-        const RED4ext::CName wanted(neuraldeck::kToggleFunctionName);
-        for (RED4ext::CClassStaticFunction* candidate : serviceClass->staticFuncs)
-        {
-            if (candidate != nullptr && candidate->shortName == wanted)
-            {
-                toggleFunc = candidate;
-                break;
-            }
-        }
-
-        if (toggleFunc == nullptr && g_logger != nullptr)
-        {
-            g_logger->InfoF(g_pluginHandle,
-                             "my-lisp-cyberpunk: NeuralDeck RTTI class '%s' found but static function '%s' missing",
-                             neuraldeck::kToggleClassName, neuraldeck::kToggleFunctionName);
-        }
-        return toggleFunc != nullptr;
-    }
-    bool InvokeToggle()
-    {
-        LogStage("NeuralDeckService.ToggleFromNative (native ExecuteFunction call)");
-        return RED4ext::ExecuteFunction(serviceClass, toggleFunc, nullptr);
-    }
-};
-void PollNeuralDeckToggle()
-{
-    const bool f10Down = (GetAsyncKeyState(VK_F10) & 0x8000) != 0;
-    Red4extNeuralDeckEngine engine;
-    const char* outcome = neuraldeck::PollToggle(engine, f10Down, g_neuralDeckF10Down);
-    if (outcome == nullptr)
-    {
-        return;
-    }
-
-    if (g_logger != nullptr)
-    {
-        // This is emitted only on a key edge, never per frame.  Keep every
-        // identity required to diagnose a live UI failure in the one record.
-        g_logger->InfoF(g_pluginHandle,
-                         "my-lisp-cyberpunk: NeuralDeck F10 edge vk=%u target=%s.%s outcome=%s",
-                         static_cast<unsigned>(VK_F10), neuraldeck::kToggleClassName,
-                         neuraldeck::kToggleFunctionName, outcome);
-    }
-}
-
 bool OnRunningEnter(RED4ext::CGameApplication*)
 {
     if (g_logger != nullptr)
@@ -364,7 +272,6 @@ bool OnRunningExit(RED4ext::CGameApplication*)
 
 bool DispatchRunningTick(RED4ext::CGameApplication*)
 {
-    PollNeuralDeckToggle();
     if (g_wsmSession == nullptr || g_wsmEvalString == nullptr || g_wsmFreeString == nullptr || g_logger == nullptr)
     {
         return true;

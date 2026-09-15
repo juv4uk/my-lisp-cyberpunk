@@ -83,9 +83,29 @@ public class NeuralDeckOverlay extends CustomPopup {
 // The service registers its hotkey only when the game instance is initialized.
 public class NeuralDeckService extends ScriptableService {
     private let m_overlay: ref<NeuralDeckOverlay>;
+    private let m_hotkey: ref<CallbackSystemHandler>;
+
+    // Codeware owns engine input delivery.  Registering here avoids polling
+    // Windows input from the RED4ext adapter and keeps presentation within the
+    // Redscript/UI layer.
+    private cb func OnLoad() {
+        this.m_hotkey = GameInstance.GetCallbackSystem()
+            .RegisterCallback(n"Input/Key", this, n"OnNeuralDeckKey", true)
+            .AddTarget(InputTarget.Key(EInputKey.IK_F10, EInputAction.IACT_Press));
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck registered Codeware F10 callback");
+    }
 
     private cb func OnUninitialize() {
+        if IsDefined(this.m_hotkey) {
+            this.m_hotkey.Unregister();
+            this.m_hotkey = null;
+        }
         this.m_overlay = null;
+    }
+
+    private cb func OnNeuralDeckKey(event: ref<KeyInputEvent>) {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck received Codeware F10 press");
+        this.ToggleOverlay();
     }
 
     public func ToggleOverlay() {
@@ -116,20 +136,4 @@ public class NeuralDeckService extends ScriptableService {
         }
     }
 
-    // Direct native entry point. The C++ adapter detects the F10 edge and
-    // calls this static function straight through RTTI (RED4ext::ExecuteFunction),
-    // the same proven call shape already used for GetPlayer/GetUISystem --
-    // no synthetic Event, no UISystem.QueueEvent, no PopupsManager hook.
-    // Codeware's own CustomPopupManager only ever queues events from
-    // Redscript itself; queuing from native C++ had no working precedent.
-    public static func ToggleFromNative() -> Void {
-        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleFromNative invoked");
-        let service = GameInstance.GetScriptableServiceContainer()
-            .GetService(n"NeuralDeckService") as NeuralDeckService;
-        if !IsDefined(service) {
-            LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleFromNative rejected: NeuralDeckService not found");
-            return;
-        }
-        service.ToggleOverlay();
-    }
 }

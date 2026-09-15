@@ -172,9 +172,3 @@ target_include_directories(
 if(MSVC)
   target_compile_options(my-lisp-cyberpunk-dispatch-benchmark PRIVATE /utf-8)
 endif()
-
-add_executable(my-lisp-cyberpunk-neuraldeck-bridge-witness ../tests/NeuralDeckBridgeWitness.cpp)
-target_include_directories(my-lisp-cyberpunk-neuraldeck-bridge-witness PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-if(BUILD_TESTING)
-  add_test(NAME neuraldeck-bridge-witness COMMAND my-lisp-cyberpunk-neuraldeck-bridge-witness)
-endif()

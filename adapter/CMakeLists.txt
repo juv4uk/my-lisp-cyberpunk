@@ -52,6 +52,7 @@ if(BUILD_TESTING)
     NAME neuraldeck-redscript-contract
     COMMAND ${CMAKE_COMMAND}
       -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../redscript/NeuralDeck/NeuralDeckOverlay.reds
+      -DADAPTER_INPUT=${CMAKE_CURRENT_SOURCE_DIR}/src/Main.cpp
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/NeuralDeckRedscriptContractTest.cmake
   )
 endif()
