@@ -1,10 +1,6 @@
 import Codeware.*
 import Codeware.UI.*
 
-// Produced by the thin C++ input adapter and delivered through UISystem.QueueEvent.
-// It carries no policy and has no Lisp semantics.
-public class NeuralDeckToggleEvent extends Event {}
-
 // Presentation only. It has no evaluator, host capability or policy.
 public class NeuralDeckOverlay extends CustomPopup {
     public func GetQueueName() -> CName {
@@ -120,20 +116,20 @@ public class NeuralDeckService extends ScriptableService {
         }
     }
 
-}
-
-// Codeware already uses this exact UISystem event pattern for its popup events.
-// The event method owns presentation only; Lisp remains outside this layer.
-@addMethod(PopupsManager)
-protected cb func OnNeuralDeckToggle(evt: ref<NeuralDeckToggleEvent>) -> Bool {
-    LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck OnNeuralDeckToggle received on PopupsManager");
-    let service = GameInstance.GetScriptableServiceContainer()
-        .GetService(n"NeuralDeckService") as NeuralDeckService;
-    if !IsDefined(service) {
-        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck OnNeuralDeckToggle rejected: NeuralDeckService not found");
-        return false;
+    // Direct native entry point. The C++ adapter detects the F10 edge and
+    // calls this static function straight through RTTI (RED4ext::ExecuteFunction),
+    // the same proven call shape already used for GetPlayer/GetUISystem --
+    // no synthetic Event, no UISystem.QueueEvent, no PopupsManager hook.
+    // Codeware's own CustomPopupManager only ever queues events from
+    // Redscript itself; queuing from native C++ had no working precedent.
+    public static func ToggleFromNative() -> Void {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleFromNative invoked");
+        let service = GameInstance.GetScriptableServiceContainer()
+            .GetService(n"NeuralDeckService") as NeuralDeckService;
+        if !IsDefined(service) {
+            LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleFromNative rejected: NeuralDeckService not found");
+            return;
+        }
+        service.ToggleOverlay();
     }
-
-    service.ToggleOverlay();
-    return true;
 }

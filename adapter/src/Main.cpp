@@ -251,28 +251,24 @@ private:
 
 std::string g_lastDispatchResult;
 
-// Hardware input is a host fact. The C++ adapter only turns its F10 edge into
-// a typed UI event; compiled Redscript owns the popup lifecycle and visuals.
+// Hardware input is a host fact. The C++ adapter only detects the F10 edge
+// and calls a static Redscript entry point directly by RTTI; compiled
+// Redscript owns the popup lifecycle and visuals.
+//
+// This replaces an earlier NeuralDeckToggleEvent + UISystem.QueueEvent +
+// @addMethod(PopupsManager) design. Codeware's own CustomPopupManager
+// (github.com/psiberx/cp2077-codeware, scripts/UI/Popups/CustomPopupManager.reds)
+// only ever queues its own popup events from Redscript itself -- there is no
+// working precedent anywhere for queuing a UISystem event from native C++
+// and having PopupsManager receive it. A direct ExecuteFunction call to a
+// static function, by contrast, is exactly the already-proven shape used
+// for GetPlayer/GetUISystem below.
 struct Red4extNeuralDeckEngine
 {
     RED4ext::CRTTISystem* rtti = nullptr;
-    RED4ext::CClass* eventClass = nullptr;
-    RED4ext::CClass* uiClass = nullptr;
-    RED4ext::CBaseFunction* queueEvent = nullptr;
-    RED4ext::Handle<RED4ext::IScriptable> uiSystem;
-    RED4ext::Handle<RED4ext::IScriptable> event;
+    RED4ext::CClass* serviceClass = nullptr;
+    RED4ext::CBaseFunction* toggleFunc = nullptr;
 
-    // Pre-call breadcrumbs, not post-call results: NeuralDeckBridge.hpp's
-    // QueueToggle only logs its final outcome, AFTER every step has already
-    // run. If any of the native calls below crash the process (which a raw
-    // RED4ext::ExecuteFunction/CreateInstance call into live engine state
-    // genuinely can), that final log line never fires and the incident
-    // leaves zero trace -- exactly what happened 2026-09-14 22:46: the
-    // plugin log's last line was at 22:45:33, CrashInfo.json's timeCrash
-    // was 22:46:56, and not one "F10 edge" line exists in between. Every
-    // method here that makes a native RTTI call now logs its own name
-    // immediately before making that call, so a repeat crash leaves the
-    // exact failing stage as the log's last line instead of silence.
     static void LogStage(const char* stage)
     {
         if (g_logger != nullptr)
@@ -282,43 +278,18 @@ struct Red4extNeuralDeckEngine
     }
 
     bool HasRtti() { rtti = RED4ext::CRTTISystem::Get(); return rtti != nullptr; }
-    bool HasToggleEventClass() { eventClass = rtti->GetClass("NeuralDeckToggleEvent"); return eventClass != nullptr; }
-    bool HasUiSystemClass() { uiClass = neuraldeck::LookupUiSystemClass(*rtti); return uiClass != nullptr; }
-    bool HasQueueEventMethod() { queueEvent = uiClass->GetFunction("QueueEvent"); return queueEvent != nullptr; }
-    bool GetUiSystem()
+    bool HasToggleFunction()
     {
-        LogStage("GetUISystem (native ExecuteFunction call)");
-
-        // Root cause of the 2026-09-15 F10 access-violation crash (see
-        // docs/neuraldeck-f10-crash-2026-09-15.md): ExecuteFunction packs
-        // each argument onto the VM stack by the target function's real
-        // parameter type. GetUISystem expects GameInstance by value, the
-        // same as the working GetPlayer call below in
-        // PlayerPresentPrimitive -- passing &gameInstance put the address
-        // of a local variable on the argument stack instead of the value
-        // itself, which the engine then read through as if it were the
-        // struct.
-        RED4ext::ScriptGameInstance gameInstance;
-        return RED4ext::ExecuteFunction("ScriptGameInstance", "GetUISystem", &uiSystem, gameInstance);
+        serviceClass = rtti->GetClass(neuraldeck::kToggleClassName);
+        if (serviceClass == nullptr) return false;
+        toggleFunc = serviceClass->GetFunction(neuraldeck::kToggleFunctionName);
+        return toggleFunc != nullptr;
     }
-    bool HasUiSystemHandle() const { return uiSystem != nullptr; }
-    bool CreateToggleEvent()
+    bool InvokeToggle()
     {
-        LogStage("CreateInstance(NeuralDeckToggleEvent)");
-        auto* rawEvent = static_cast<RED4ext::IScriptable*>(eventClass->CreateInstance());
-        if (rawEvent == nullptr) return false;
-        event = RED4ext::Handle<RED4ext::IScriptable>(rawEvent);
-        return true;
+        LogStage("NeuralDeckService.ToggleFromNative (native ExecuteFunction call)");
+        return RED4ext::ExecuteFunction(serviceClass, toggleFunc, nullptr);
     }
-    bool QueueEventReturnsVoid() const { return queueEvent->returnType == nullptr; }
-    bool SubmitToggleEvent()
-    {
-        LogStage("QueueEvent (native ExecuteFunction call on live UISystem instance)");
-        RED4ext::StackArgs_t args;
-        args.emplace_back(nullptr, &event);
-        return RED4ext::ExecuteFunction(uiSystem.instance, queueEvent, nullptr, args);
-    }
-    void ReleaseToggleEvent() { event = nullptr; }
 };
 void PollNeuralDeckToggle()
 {
@@ -335,9 +306,9 @@ void PollNeuralDeckToggle()
         // This is emitted only on a key edge, never per frame.  Keep every
         // identity required to diagnose a live UI failure in the one record.
         g_logger->InfoF(g_pluginHandle,
-                         "my-lisp-cyberpunk: NeuralDeck F10 edge vk=%u event=NeuralDeckToggleEvent "
-                         "ui-rtti=%s outcome=%s",
-                         static_cast<unsigned>(VK_F10), neuraldeck::kUiSystemRttiName, outcome);
+                         "my-lisp-cyberpunk: NeuralDeck F10 edge vk=%u target=%s.%s outcome=%s",
+                         static_cast<unsigned>(VK_F10), neuraldeck::kToggleClassName,
+                         neuraldeck::kToggleFunctionName, outcome);
     }
 }
 

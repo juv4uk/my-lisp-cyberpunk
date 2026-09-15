@@ -2,33 +2,17 @@
 
 namespace neuraldeck
 {
-inline constexpr const char* kUiSystemRttiName = "gameuiGameSystemUI";
-
-template <typename Rtti>
-auto LookupUiSystemClass(Rtti& rtti)
-{
-    return rtti.GetClass(kUiSystemRttiName);
-}
+inline constexpr const char* kToggleClassName = "NeuralDeckService";
+inline constexpr const char* kToggleFunctionName = "ToggleFromNative";
 
 template <typename Engine>
 const char* QueueToggle(Engine& engine)
 {
     if (!engine.HasRtti()) return "rejected: RTTI unavailable";
-    if (!engine.HasToggleEventClass()) return "rejected: NeuralDeckToggleEvent class missing";
-    if (!engine.HasUiSystemClass()) return "rejected: UISystem class missing";
-    if (!engine.HasQueueEventMethod()) return "rejected: UISystem.QueueEvent method missing";
-    if (!engine.GetUiSystem()) return "rejected: GetUISystem execution failed";
-    if (!engine.HasUiSystemHandle()) return "rejected: GetUISystem returned empty handle";
-    if (!engine.CreateToggleEvent()) return "rejected: event allocation failed";
-    if (!engine.QueueEventReturnsVoid()) {
-        engine.ReleaseToggleEvent();
-        return "rejected: QueueEvent has unexpected non-void return type";
-    }
-    const bool submitted = engine.SubmitToggleEvent();
-    engine.ReleaseToggleEvent();
-    return submitted
-        ? "submitted: QueueEvent call succeeded; UI receipt not yet confirmed"
-        : "rejected: QueueEvent execution failed";
+    if (!engine.HasToggleFunction()) return "rejected: NeuralDeckService.ToggleFromNative missing";
+    return engine.InvokeToggle()
+        ? "submitted: ToggleFromNative call succeeded"
+        : "rejected: ToggleFromNative execution failed";
 }
 
 template <typename Engine>
