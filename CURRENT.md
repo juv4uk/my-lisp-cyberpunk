@@ -18,6 +18,8 @@ listed below, this file and the docs it points to win; anything in
 - [`docs/surface-extensions.md`](docs/surface-extensions.md) — `.my`/`.мій` equal-surface loading.
 - [`docs/deep-penetration-roadmap-2026-09-10.md`](docs/deep-penetration-roadmap-2026-09-10.md) — owner's roadmap analysis; its own "Статус після трьох фіксів" table is kept current, task ladder now lives in `tasks.my`.
 - [`docs/repl-contract.md`](docs/repl-contract.md) — active contract for the first local interactive REPL transport.
+- [`docs/neuraldeck-f10-retrospective.md`](docs/neuraldeck-f10-retrospective.md) — full error history and the current live-verification gate; status is **in progress**, not done.
+- [`docs/neuraldeck-logchannel-verification-gap-2026-09-16.md`](docs/neuraldeck-logchannel-verification-gap-2026-09-16.md) — read straight from live game logs: no crash on the latest run, but none of the retrospective's own LogChannel confirmation lines appear anywhere; proposes routing confirmation through the already-working C++ adapter logger instead.
 
 ## Tasks
 
