@@ -94,17 +94,24 @@ public class NeuralDeckService extends ScriptableService {
 
     public func ToggleOverlay() {
         if IsDefined(this.m_overlay) {
+            LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay closing existing overlay");
             this.m_overlay.Close();
             return;
         }
 
         let popupManager = CustomPopupManager.GetInstance();
-        if !IsDefined(popupManager) || !popupManager.IsInitialized() {
+        if !IsDefined(popupManager) {
+            LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay rejected: CustomPopupManager instance missing");
+            return;
+        }
+        if !popupManager.IsInitialized() {
+            LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay rejected: CustomPopupManager not initialized");
             return;
         }
 
         this.m_overlay = new NeuralDeckOverlay();
         popupManager.ShowPopup(this.m_overlay);
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay showed popup");
     }
 
     public func OnOverlayHidden(overlay: ref<NeuralDeckOverlay>) {
@@ -119,9 +126,11 @@ public class NeuralDeckService extends ScriptableService {
 // The event method owns presentation only; Lisp remains outside this layer.
 @addMethod(PopupsManager)
 protected cb func OnNeuralDeckToggle(evt: ref<NeuralDeckToggleEvent>) -> Bool {
+    LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck OnNeuralDeckToggle received on PopupsManager");
     let service = GameInstance.GetScriptableServiceContainer()
         .GetService(n"NeuralDeckService") as NeuralDeckService;
     if !IsDefined(service) {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck OnNeuralDeckToggle rejected: NeuralDeckService not found");
         return false;
     }
 
