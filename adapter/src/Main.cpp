@@ -281,8 +281,37 @@ struct Red4extNeuralDeckEngine
     bool HasToggleFunction()
     {
         serviceClass = rtti->GetClass(neuraldeck::kToggleClassName);
-        if (serviceClass == nullptr) return false;
-        toggleFunc = serviceClass->GetFunction(neuraldeck::kToggleFunctionName);
+        if (serviceClass == nullptr)
+        {
+            if (g_logger != nullptr)
+            {
+                g_logger->InfoF(g_pluginHandle,
+                                 "my-lisp-cyberpunk: NeuralDeck RTTI class lookup failed for '%s'",
+                                 neuraldeck::kToggleClassName);
+            }
+            return false;
+        }
+
+        // ToggleFromNative is `public static func`. CClass keeps instance
+        // methods (funcs) and static methods (staticFuncs) in two separate
+        // arrays; GetFunction only searches funcs. Search staticFuncs by
+        // shortName directly.
+        const RED4ext::CName wanted(neuraldeck::kToggleFunctionName);
+        for (RED4ext::CClassStaticFunction* candidate : serviceClass->staticFuncs)
+        {
+            if (candidate != nullptr && candidate->shortName == wanted)
+            {
+                toggleFunc = candidate;
+                break;
+            }
+        }
+
+        if (toggleFunc == nullptr && g_logger != nullptr)
+        {
+            g_logger->InfoF(g_pluginHandle,
+                             "my-lisp-cyberpunk: NeuralDeck RTTI class '%s' found but static function '%s' missing",
+                             neuraldeck::kToggleClassName, neuraldeck::kToggleFunctionName);
+        }
         return toggleFunc != nullptr;
     }
     bool InvokeToggle()
