@@ -66,6 +66,19 @@ if(BUILD_TESTING)
       -DFIXTURES_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/observation
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ObservationContractFixturesTest.cmake
   )
+  if(WIN32)
+    # #29/#30 probe scripts and the #19 boundary guard are PowerShell,
+    # not C++; wire them into the same ctest surface so `ctest` remains
+    # the single source of truth for this repo's test status.
+    add_test(
+      NAME observation-probes-live
+      COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tests/ObservationProbesLiveTest.ps1
+    )
+    add_test(
+      NAME vanilla-boundary-guard-mutation
+      COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tests/VanillaBoundaryGuardTest.ps1
+    )
+  endif()
 endif()
 
 add_subdirectory(src)
