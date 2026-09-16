@@ -3,6 +3,7 @@ name = "wsm-my-lisp-cyberpunk-dll"
 # Canonical host home: my-lisp-cyberpunk/host-runtime (migrated from wsm-my-lisp/dll, 2026-09-11)
 version = "0.1.0"
 edition = "2021"
+license-file = "../LICENSE"
 
 [dependencies]
 wsm-os-target = { git = "https://github.com/juv4uk/wsm-target-contract.git", rev = "bb6e119", package = "wsm-os-target" }
