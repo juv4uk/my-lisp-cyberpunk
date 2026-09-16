@@ -21,6 +21,37 @@ public class NeuralDeckOverlay extends CustomPopup {
         this.m_closeAction = n"neuraldeck_no_close_action";
     }
 
+    // Fine-grained stage logging over Codeware's own CustomPopup.reds
+    // lifecycle (OnAttach -> OnShow -> OnShowFinish -> ... -> OnHide ->
+    // OnHideFinish -> OnHidden). The 2026-09-16 evidence shows the popup
+    // never reaches OnHidden even seconds after Close(), which is far
+    // longer than the 0.25s fade animation Codeware plays -- these
+    // overrides pinpoint which stage the chain actually reaches instead of
+    // guessing further.
+    protected cb func OnAttach() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnAttach");
+        super.OnAttach();
+    }
+
+    protected cb func OnShow() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnShow");
+        super.OnShow();
+    }
+
+    protected cb func OnShown() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnShown (show animation finished)");
+    }
+
+    protected cb func OnDetach() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnDetach");
+        super.OnDetach();
+    }
+
+    protected cb func OnHide() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnHide");
+        super.OnHide();
+    }
+
     protected cb func OnCreate() {
         let root = new inkCanvas();
         root.SetName(n"NeuralDeckRoot");
