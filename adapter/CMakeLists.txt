@@ -66,6 +66,17 @@ if(BUILD_TESTING)
       -DFIXTURES_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/observation
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ObservationContractFixturesTest.cmake
   )
+  # CP-OBSERVATION-CROSSCHECK-V0 (issue #32): the MEMORY-vs-SCREEN
+  # cross-check policy itself, tested against all 5 scenarios #32's own
+  # acceptance criteria require, without needing a live game.
+  add_test(
+    NAME observation-crosscheck-fixtures
+    COMMAND ${CMAKE_COMMAND}
+      -DMY_LISP_EXE=${CMAKE_CURRENT_SOURCE_DIR}/../runtime/my-lisp/target/release/my-lisp.exe
+      -DPOLICY_FILE=${CMAKE_CURRENT_SOURCE_DIR}/../tools/observation/crosscheck.lisp
+      -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/crosscheck/five-scenarios.lisp
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ObservationCrosscheckFixturesTest.cmake
+  )
   if(WIN32)
     # #29/#30 probe scripts and the #19 boundary guard are PowerShell,
     # not C++; wire them into the same ctest surface so `ctest` remains
