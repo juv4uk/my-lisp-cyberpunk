@@ -84,6 +84,7 @@ public class NeuralDeckOverlay extends CustomPopup {
 public class NeuralDeckService extends ScriptableService {
     private let m_overlay: ref<NeuralDeckOverlay>;
     private let m_hotkey: ref<CallbackSystemHandler>;
+    private let m_closing: Bool;
 
     // Codeware owns engine input delivery.  Registering here avoids polling
     // Windows input from the RED4ext adapter and keeps presentation in the
@@ -116,7 +117,23 @@ public class NeuralDeckService extends ScriptableService {
 
     public func ToggleOverlay() {
         if IsDefined(this.m_overlay) {
+            // Close() (Codeware CustomPopup.reds) only queues a
+            // HideCustomPopupEvent; the popup does not actually detach and
+            // reach OnHidden() until a fade-out animation finishes a frame
+            // or more later. A second Close() call before that animation
+            // completes restarts OnDetach()/the fade, so OnHideFinish (and
+            // therefore our own OnHidden -> OnOverlayHidden reset) can be
+            // pushed out indefinitely by repeated key presses -- observed
+            // live as m_overlay staying permanently non-null after the
+            // first rapid double-press, so every later press just closes a
+            // phantom that never reopens. Ignore re-entrant close requests
+            // instead of re-issuing Close() on an already-closing popup.
+            if this.m_closing {
+                LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay ignored: already closing");
+                return;
+            }
             LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay closing existing overlay");
+            this.m_closing = true;
             this.m_overlay.Close();
             return;
         }
@@ -139,6 +156,7 @@ public class NeuralDeckService extends ScriptableService {
     public func OnOverlayHidden(overlay: ref<NeuralDeckOverlay>) {
         if Equals(this.m_overlay, overlay) {
             this.m_overlay = null;
+            this.m_closing = false;
         }
     }
 
