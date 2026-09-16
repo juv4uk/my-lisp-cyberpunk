@@ -23,6 +23,11 @@ jobs:
         working-directory: host-runtime
         run: cargo build --release
 
+      - name: Build canonical my-lisp runtime
+        # adapter's observation-contract-fixtures CTest (#28) shells out to
+        # this binary's --oracle-check; it must exist before ctest runs.
+        run: ./tools/build-my-lisp-runtime.ps1
+
       - name: Configure RED4ext adapter
         run: cmake -S adapter -B adapter/build
 

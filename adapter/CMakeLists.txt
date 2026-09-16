@@ -55,6 +55,17 @@ if(BUILD_TESTING)
       -DADAPTER_INPUT=${CMAKE_CURRENT_SOURCE_DIR}/src/Main.cpp
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/NeuralDeckRedscriptContractTest.cmake
   )
+  # CP-OBSERVATION-CONTRACT-V0 (issue #28): requires the canonical my-lisp
+  # runtime built by tools/build-my-lisp-runtime.ps1 (runtime/my-lisp
+  # submodule) to exist first. CI builds it before invoking ctest; see
+  # .github/workflows/windows.yml.
+  add_test(
+    NAME observation-contract-fixtures
+    COMMAND ${CMAKE_COMMAND}
+      -DMY_LISP_EXE=${CMAKE_CURRENT_SOURCE_DIR}/../runtime/my-lisp/target/release/my-lisp.exe
+      -DFIXTURES_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/observation
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ObservationContractFixturesTest.cmake
+  )
 endif()
 
 add_subdirectory(src)

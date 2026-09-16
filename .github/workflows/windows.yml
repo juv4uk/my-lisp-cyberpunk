@@ -15,6 +15,10 @@ jobs:
       - name: Test checked embedded Lisp boundary
         working-directory: host-runtime
         run: cargo test
+      - name: Build canonical my-lisp runtime
+        # adapter's observation-contract-fixtures CTest (#28) shells out to
+        # this binary's --oracle-check; it must exist before ctest runs.
+        run: ./tools/build-my-lisp-runtime.ps1
       - name: Configure adapter
         # windows-latest no longer guarantees a Visual Studio generator. Let
         # CMake choose the runner-supported generator, as the verification
