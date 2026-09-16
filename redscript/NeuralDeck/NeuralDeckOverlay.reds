@@ -58,7 +58,7 @@ public class NeuralDeckOverlay extends CustomPopup {
         divider.Reparent(panel);
 
         let status = new inkText();
-        status.SetText("CANONICAL SESSION // BRIDGE READY\nF10 — CLOSE   •   GAME CONTINUES RUNNING");
+        status.SetText("CANONICAL SESSION // BRIDGE READY\nEND — CLOSE   •   GAME CONTINUES RUNNING");
         status.SetFontFamily("base\\gameplay\\gui\\fonts\\raj\\raj.inkfontfamily");
         status.SetFontStyle(n"Regular");
         status.SetFontSize(20);
@@ -80,19 +80,19 @@ public class NeuralDeckOverlay extends CustomPopup {
 }
 
 // Codeware discovers every concrete ScriptableService during script startup.
-// The service registers its hotkey only when the game instance is initialized.
+// The service registers its hotkey when Codeware creates the service.
 public class NeuralDeckService extends ScriptableService {
     private let m_overlay: ref<NeuralDeckOverlay>;
     private let m_hotkey: ref<CallbackSystemHandler>;
 
     // Codeware owns engine input delivery.  Registering here avoids polling
-    // Windows input from the RED4ext adapter and keeps presentation within the
-    // Redscript/UI layer.
+    // Windows input from the RED4ext adapter and keeps presentation in the
+    // Redscript/UI layer.  Filter in the receiver: this avoids a broken
+    // function-key target filter while retaining one precise hotkey.
     private cb func OnLoad() {
         this.m_hotkey = GameInstance.GetCallbackSystem()
-            .RegisterCallback(n"Input/Key", this, n"OnNeuralDeckKey", true)
-            .AddTarget(InputTarget.Key(EInputKey.IK_F10, EInputAction.IACT_Press));
-        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck registered Codeware F10 callback");
+            .RegisterCallback(n"Input/Key", this, n"OnNeuralDeckKey", true);
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck registered Codeware End callback");
     }
 
     private cb func OnUninitialize() {
@@ -104,7 +104,13 @@ public class NeuralDeckService extends ScriptableService {
     }
 
     private cb func OnNeuralDeckKey(event: ref<KeyInputEvent>) {
-        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck received Codeware F10 press");
+        if !Equals(event.GetAction(), EInputAction.IACT_Press) {
+            return;
+        }
+        if !Equals(event.GetKey(), EInputKey.IK_End) {
+            return;
+        }
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck received Codeware End press");
         this.ToggleOverlay();
     }
 

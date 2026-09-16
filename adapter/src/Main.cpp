@@ -255,7 +255,7 @@ bool OnRunningEnter(RED4ext::CGameApplication*)
     {
         g_logger->InfoF(g_pluginHandle,
                          "my-lisp-cyberpunk: entered Running state; fixed dispatch bytes=%zu; "
-                         "NeuralDeck hotkey=F10",
+                         "NeuralDeck hotkey=End (Codeware)",
                          g_dispatchSource.size());
     }
     return true;

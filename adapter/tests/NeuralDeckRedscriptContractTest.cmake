@@ -22,9 +22,10 @@ require_fragment("public func IsBlocking() -> Bool {\n        return false;" "no
 require_fragment("public class NeuralDeckService extends ScriptableService" "Codeware service")
 require_fragment("private cb func OnLoad()" "service load lifecycle")
 require_fragment("GameInstance.GetCallbackSystem()" "Codeware callback system")
-require_fragment("RegisterCallback(n\"Input/Key\", this, n\"OnNeuralDeckKey\", true)" "F10 callback registration")
-require_fragment("InputTarget.Key(EInputKey.IK_F10, EInputAction.IACT_Press)" "F10 press filter")
-require_fragment("private cb func OnNeuralDeckKey(event: ref<KeyInputEvent>)" "F10 callback receiver")
+require_fragment("RegisterCallback(n\"Input/Key\", this, n\"OnNeuralDeckKey\", true);" "End callback registration")
+require_fragment("if !Equals(event.GetAction(), EInputAction.IACT_Press)" "press filter")
+require_fragment("if !Equals(event.GetKey(), EInputKey.IK_End)" "End key filter")
+require_fragment("private cb func OnNeuralDeckKey(event: ref<KeyInputEvent>)" "End callback receiver")
 require_fragment("this.m_hotkey.Unregister();" "F10 callback cleanup")
 require_fragment("popupManager.ShowPopup(this.m_overlay)" "popup display action")
 
