@@ -148,15 +148,32 @@ open, needs an experiment.
 - **Version dependency**: plausible-low relative to Families 1/3 — CDPR
   maintains REDmod and Redscript compatibility as part of shipping the
   base game itself, not a community project reverse-engineering it.
-- **Smallest falsifiable proof**: unknown. This is this family's real
-  open question, not a detail to fill in later: **can pure Redscript,
-  compiled and loaded only through REDmod with zero RED4ext present,
-  get a fact (e.g. player health) out of the game process at all** —
-  Redscript has no confirmed file-write or IPC primitive available
-  without a native extension. If it cannot get data out, this family
-  is a dead end for *this* project regardless of how clean its
-  in-game side is, no matter how attractive the rest of its profile
-  looks.
+- **Smallest falsifiable proof**: **researched further 2026-09-16,
+  evidence now leans negative but is not fully closed.** Checked the
+  two real-world examples of Redscript-side file I/O found on Nexus —
+  [RedFileSystem](https://www.nexusmods.com/cyberpunk2077/mods/13378)
+  and [RedLogger](https://www.nexusmods.com/cyberpunk2077/mods/31920)
+  — and both are explicitly **RED4ext plugins**; RedLogger's own
+  description is "no CET required" but still lists RED4ext as a hard
+  requirement. Neither is evidence that bare Redscript (REDmod-only,
+  zero RED4ext) can write a file or otherwise signal outward. Separately,
+  this repo's own live evidence (`docs/neuraldeck-logchannel-verification-gap-2026-09-16.md`)
+  showed that `LogChannel()` calls produced **no output anywhere
+  observable** until CET was installed to hook that native function —
+  consistent with, though not proof of, native `Log`/`LogChannel`
+  having no vanilla output sink at all without something hooking it.
+  No public source was found describing a genuinely CET/RED4ext-free
+  file-write or IPC-out path from Redscript. **This family is not yet
+  fully falsified** — the one remaining gap is that this is
+  documentation research, not a direct experiment against a running
+  game with zero mods and a REDmod-compiled script calling declared
+  `Log()`. That single experiment (does a bare `native func Log`
+  declaration + REDmod-only compile produce anything in any file on
+  disk, with nothing else installed) is the cheapest remaining way to
+  close this family definitively, and needs a live session. If it
+  cannot get data out, this family is a dead end for *this* project
+  regardless of how clean its in-game side is, no matter how
+  attractive the rest of its profile looks.
 - **What remains after removing all third-party frameworks**: by
   definition, everything — REDmod is not a third-party framework to
   begin with.
