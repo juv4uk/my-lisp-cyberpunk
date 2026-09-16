@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-runtime:
-    runs-on: windows-latest
+  contract:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Cyberpunk repo
         uses: actions/checkout@v4
@@ -20,6 +20,13 @@ jobs:
       - name: Verify runtime contract
         shell: pwsh
         run: ./tests/runtime-my-lisp-contract.ps1
+
+  build-runtime:
+    needs: contract
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Cyberpunk repo
+        uses: actions/checkout@v4
 
       - name: Build pinned my-lisp runtime
         shell: pwsh
