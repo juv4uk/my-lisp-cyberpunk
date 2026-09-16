@@ -34,9 +34,17 @@ $forbidden = @(
     @{ Path = 'bin\x64\plugins\cyber_engine_tweaks.asi'; Name = 'CET' }
     @{ Path = 'bin\x64\plugins\cyber_engine_tweaks'; Name = 'CET plugin directory' }
     @{ Path = 'r6\scripts\NeuralDeck'; Name = 'our old RED4ext-era Redscript' }
-    @{ Path = 'r6\cache\final.redscripts.modded'; Name = 'compiled modded script cache' }
-    @{ Path = 'r6\cache\modded'; Name = 'modded script cache directory' }
 )
+
+# r6\cache\modded\ and final.redscripts.modded are NOT forbidden on
+# their own: the official, first-party REDmod tool (tools\redmod\bin\
+# redMod.exe deploy) writes to this exact path for any legitimately
+# staged mod, including our own redscript-vanilla-probe experiments
+# (see docs/research/vanilla-redmod-log-experiment-result-2026-09-16.md).
+# A prior version of this guard treated that path itself as forbidden,
+# which would have failed against our own official-REDmod-only
+# deployment -- the actual forbidden signal is RED4ext/CET presence
+# (checked above), not this cache directory's mere existence.
 
 $failures = @()
 

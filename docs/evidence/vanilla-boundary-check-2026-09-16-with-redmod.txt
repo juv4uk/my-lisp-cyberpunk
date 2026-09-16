@@ -1,0 +1,9 @@
+﻿PASS: absent - RED4ext (loader directory)
+PASS: absent - RED4ext winmm.dll proxy loader
+PASS: absent - CET version.dll proxy loader
+PASS: absent - CET (legacy top-level path)
+PASS: absent - CET
+PASS: absent - CET plugin directory
+PASS: absent - our old RED4ext-era Redscript
+PASS: vanilla runtime boundary holds - 0 forbidden third-party mod frameworks in D:\games\Cyberpunk 2077 v.2.31 (2020)\
+Cyberpunk 2077
