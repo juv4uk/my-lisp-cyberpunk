@@ -1,0 +1,45 @@
+name: Runtime my-lisp witness
+
+on:
+  pull_request:
+    paths:
+      - ".gitmodules"
+      - "runtime/my-lisp"
+      - "tools/build-my-lisp-runtime.ps1"
+      - "tests/runtime-my-lisp-contract.ps1"
+      - ".github/workflows/runtime-my-lisp.yml"
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Cyberpunk repo
+        uses: actions/checkout@v4
+
+      - name: Verify runtime contract
+        shell: pwsh
+        run: ./tests/runtime-my-lisp-contract.ps1
+
+  build-runtime:
+    needs: contract
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Cyberpunk repo
+        uses: actions/checkout@v4
+
+      - name: Build pinned my-lisp runtime
+        shell: pwsh
+        run: ./tools/build-my-lisp-runtime.ps1
+
+      - name: Prove runtime binary exists and starts
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD "runtime/my-lisp/target/release/my-lisp.exe"
+          if (-not (Test-Path $exe)) {
+            throw "Expected runtime binary was not produced: $exe"
+          }
+          & $exe --help | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "my-lisp.exe --help failed with exit code $LASTEXITCODE"
+          }

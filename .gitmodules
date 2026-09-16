@@ -4,3 +4,6 @@
 [submodule "host-runtime/external/my-lisp"]
 	path = host-runtime/external/my-lisp
 	url = https://github.com/juv4uk/my-lisp.git
+[submodule "runtime/my-lisp"]
+	path = runtime/my-lisp
+	url = https://github.com/juv4uk/my-lisp.git
