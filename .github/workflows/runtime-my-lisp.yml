@@ -49,7 +49,7 @@ jobs:
             throw "my-lisp.exe --help failed with exit code $LASTEXITCODE"
           }
 
-      - name: Prove exact runtime provenance is recorded
+      - name: Prove exact runtime provenance and static-link inputs are recorded
         shell: pwsh
         run: |
           $module = Join-Path $PWD "runtime/my-lisp"
@@ -67,4 +67,18 @@ jobs:
           }
           if ($text -notmatch 'embed-abi=[0-9]+') {
             throw "Provenance does not record embed ABI"
+          }
+
+          $staticMatch = [regex]::Match($text, '(?m)^embed-staticlib=(.+)$')
+          if (-not $staticMatch.Success) {
+            throw "Provenance does not record Cargo-reported embed-staticlib"
+          }
+          $staticPath = $staticMatch.Groups[1].Value.Trim()
+          if (-not (Test-Path $staticPath)) {
+            throw "Recorded embed staticlib does not exist: $staticPath"
+          }
+
+          $nativeMatch = [regex]::Match($text, '(?m)^native-static-libs=(.+)$')
+          if (-not $nativeMatch.Success -or [string]::IsNullOrWhiteSpace($nativeMatch.Groups[1].Value)) {
+            throw "Provenance does not record rustc native-static-libs"
           }
