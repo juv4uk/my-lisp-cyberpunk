@@ -144,10 +144,10 @@ try {
 try {
     $actualImage = $process.MainModule.FileName
 } catch {
-    throw "could not read target process image for pid $ProcessId: $($_.Exception.Message)"
+    throw "could not read target process image for pid ${ProcessId}: $($_.Exception.Message)"
 }
 if (-not (Test-PathEqual $actualImage $expectedImage)) {
-    throw "process image mismatch for pid $ProcessId: expected '$expectedImage', actual '$actualImage'"
+    throw "process image mismatch for pid ${ProcessId}: expected '$expectedImage', actual '$actualImage'"
 }
 if (-not $HarnessMode -and (Split-Path -Leaf $actualImage) -cne 'Cyberpunk2077.exe') {
     throw "live target process image is not exactly Cyberpunk2077.exe: $actualImage"
