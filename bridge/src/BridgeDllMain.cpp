@@ -10,8 +10,9 @@
 //
 // Lesson already paid for in this repo's own history
 // (docs/deep-penetration-roadmap-2026-09-10.md, problem 1: "RTTI call
-// during Load"): DllMain does nothing beyond spawning a thread.
-// Anything heavier belongs on that thread after the loader lock is released.
+// during Load"): DllMain does nothing beyond atomic lifecycle preparation and
+// spawning a thread. Anything heavier belongs on that thread after the loader
+// lock is released.
 //
 // Export forwarding: each real version.dll export is a thin function that
 // loads the genuine system DLL (deployed alongside as "version-original.dll")
@@ -151,6 +152,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
     if (reason == DLL_PROCESS_ATTACH)
     {
         DisableThreadLibraryCalls(hModule);
+        cyberpunk_bridge::PrepareCanonicalRepl();
         HANDLE thread = CreateThread(nullptr, 0, BridgeThread, hModule, 0, nullptr);
         if (thread != nullptr)
         {
