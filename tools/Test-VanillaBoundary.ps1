@@ -29,7 +29,6 @@ $gameRoot = (Resolve-Path -LiteralPath $GameDir).Path
 $forbidden = @(
     @{ Path = 'red4ext'; Name = 'RED4ext (loader directory)' }
     @{ Path = 'bin\x64\winmm.dll'; Name = 'RED4ext winmm.dll proxy loader' }
-    @{ Path = 'bin\x64\version.dll'; Name = 'CET version.dll proxy loader' }
     @{ Path = 'bin\x64\cyber_engine_tweaks.asi'; Name = 'CET (legacy top-level path)' }
     @{ Path = 'bin\x64\plugins\cyber_engine_tweaks.asi'; Name = 'CET' }
     @{ Path = 'bin\x64\plugins\cyber_engine_tweaks'; Name = 'CET plugin directory' }
@@ -45,6 +44,15 @@ $forbidden = @(
 # which would have failed against our own official-REDmod-only
 # deployment -- the actual forbidden signal is RED4ext/CET presence
 # (checked above), not this cache directory's mere existence.
+
+# bin\x64\version.dll is likewise NOT forbidden on its own, for the
+# same reason: our own #31 in-process bridge (bridge/) legitimately
+# uses that exact load-order path. This session's own CET install
+# extracted BOTH bin\x64\version.dll AND bin\x64\plugins\
+# cyber_engine_tweaks.asi together -- version.dll alone never
+# distinguished CET; the .asi/plugin directory checked above is CET's
+# real, unambiguous signature. A prior version of this guard would
+# have failed our own legitimate bridge deployment.
 
 $failures = @()
 
