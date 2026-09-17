@@ -51,13 +51,15 @@ jobs:
       - name: Build vanilla bridge and harness
         run: cmake --build bridge/build --config Release --parallel 4
 
-      - name: Stage provenance and real system version.dll without embed sidecar
+      - name: Stage provenance only; no embed or forwarding sidecars
         shell: pwsh
         run: |
-          Copy-Item "$env:WINDIR\System32\version.dll" "bridge\build\Release\version-original.dll"
           Copy-Item "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt" "bridge\build\Release\cyberpunk-my-lisp-provenance.txt"
-          if (Test-Path "bridge\build\Release\my_lisp_embed.dll") {
-            throw "one-DLL GREEN fixture must not stage my_lisp_embed.dll"
+          foreach ($forbidden in @('my_lisp_embed.dll', 'version-original.dll')) {
+            $path = Join-Path "bridge\build\Release" $forbidden
+            if (Test-Path $path) {
+              throw "one-DLL RED fixture must not stage $forbidden"
+            }
           }
 
       - name: Prove vanilla bridge owns one persistent canonical REPL session
