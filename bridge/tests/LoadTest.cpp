@@ -9,6 +9,9 @@
 
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <thread>
 
@@ -172,6 +175,75 @@ bool RequireReply(SOCKET client, const char* source, const char* expected)
     }
     return true;
 }
+
+std::string ReadText(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+    {
+        return {};
+    }
+    std::ostringstream text;
+    text << input.rdbuf();
+    return text.str();
+}
+
+std::string ProvenanceValue(const std::string& text, const std::string& key)
+{
+    const std::string prefix = key + "=";
+    std::size_t start = text.find(prefix);
+    if (start == std::string::npos)
+    {
+        return {};
+    }
+    start += prefix.size();
+    std::size_t end = text.find_first_of("\r\n", start);
+    return text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+}
+
+bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath)
+{
+    const std::filesystem::path directory = bridgePath.parent_path();
+    const std::filesystem::path provenancePath = directory / "cyberpunk-my-lisp-provenance.txt";
+    const std::filesystem::path observationPath = directory / "bridge-observation.lisp";
+
+    const std::string provenance = ReadText(provenancePath);
+    if (provenance.empty())
+    {
+        std::fprintf(stderr, "canonical provenance file missing beside bridge: %s\n",
+                     provenancePath.string().c_str());
+        return false;
+    }
+
+    const std::string sha = ProvenanceValue(provenance, "my-lisp-sha");
+    const std::string abi = ProvenanceValue(provenance, "embed-abi");
+    if (sha.size() != 40 || abi.empty())
+    {
+        std::fprintf(stderr, "canonical provenance file lacks exact SHA/ABI\n");
+        return false;
+    }
+
+    const std::string observation = ReadText(observationPath);
+    if (observation.empty())
+    {
+        std::fprintf(stderr, "bridge observation missing: %s\n", observationPath.string().c_str());
+        return false;
+    }
+
+    const std::string shaFact = "(my-lisp-sha \"" + sha + "\")";
+    const std::string abiFact = "(embed-abi " + abi + ")";
+    if (observation.find(shaFact) == std::string::npos)
+    {
+        std::fprintf(stderr, "bridge observation missing exact my-lisp SHA: %s\n", sha.c_str());
+        return false;
+    }
+    if (observation.find(abiFact) == std::string::npos)
+    {
+        std::fprintf(stderr, "bridge observation missing accepted embed ABI: %s\n", abi.c_str());
+        return false;
+    }
+    return true;
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -270,6 +342,10 @@ int main(int argc, char** argv)
     {
         return 10;
     }
-    std::printf("persistent canonical REPL + shutdown witness OK\n");
+    if (!ProveRuntimeProvenance(std::filesystem::path(argv[1])))
+    {
+        return 11;
+    }
+    std::printf("persistent canonical REPL + shutdown + provenance witness OK\n");
     return 0;
 }
