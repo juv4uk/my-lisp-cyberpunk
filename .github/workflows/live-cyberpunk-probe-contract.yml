@@ -1,0 +1,59 @@
+name: Live Cyberpunk probe contract
+
+on:
+  pull_request:
+
+jobs:
+  live-probe-contract:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build canonical my-lisp runtime
+        shell: pwsh
+        run: ./tools/build-my-lisp-runtime.ps1
+
+      - name: Configure vanilla bridge with pinned static my-lisp
+        shell: pwsh
+        run: |
+          $provenance = "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt"
+          $lines = @(Get-Content $provenance)
+          $staticLine = @($lines | Where-Object { $_ -like 'static-artifact=*' })
+          $nativeLine = @($lines | Where-Object { $_ -like 'native-static-libs=*' })
+          $shaLine = @($lines | Where-Object { $_ -like 'my-lisp-sha=*' })
+          if ($staticLine.Count -ne 1 -or $nativeLine.Count -ne 1 -or $shaLine.Count -ne 1) {
+            throw "canonical build provenance does not expose one static artifact/native/SHA input set"
+          }
+          $static = $staticLine[0].Substring('static-artifact='.Length).Trim()
+          $native = $nativeLine[0].Substring('native-static-libs='.Length).Trim()
+          $sha = $shaLine[0].Substring('my-lisp-sha='.Length).Trim()
+          if (-not (Test-Path $static) -or [string]::IsNullOrWhiteSpace($native) -or $sha -notmatch '^[0-9a-f]{40}$') {
+            throw "canonical static link/provenance inputs are incomplete"
+          }
+          cmake -S bridge -B bridge/build `
+            "-DMY_LISP_EMBED_STATIC=$static" `
+            "-DMY_LISP_NATIVE_LIBS=$native" `
+            "-DMY_LISP_SHA=$sha"
+          if ($LASTEXITCODE -ne 0) { throw "vanilla bridge configure failed" }
+
+      - name: Build vanilla bridge
+        run: cmake --build bridge/build --config Release --parallel 4
+
+      - name: Stage exact one-DLL artifact
+        shell: pwsh
+        run: |
+          $stage = "bridge\runtime-stage"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "bridge\build\Release\version.dll" (Join-Path $stage "version.dll")
+
+      - name: Prove live-process evidence verifier contract
+        shell: pwsh
+        run: >-
+          & .\tools\tests\LiveCyberpunkProbeEvidenceTest.ps1
+          -BridgeDll .\bridge\runtime-stage\version.dll
+          -MyLispExe .\runtime\my-lisp\target\release\my-lisp.exe
