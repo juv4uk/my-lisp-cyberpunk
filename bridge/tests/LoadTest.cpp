@@ -15,22 +15,76 @@
 namespace
 {
 constexpr std::uint16_t kReplPort = 40777;
+constexpr long kConnectPollMicros = 100000;
+
+bool TryConnect(SOCKET client, const sockaddr_in& address)
+{
+    u_long nonBlocking = 1;
+    if (ioctlsocket(client, FIONBIO, &nonBlocking) != 0)
+    {
+        return false;
+    }
+
+    const int result = connect(client, reinterpret_cast<const sockaddr*>(&address), sizeof(address));
+    if (result != 0)
+    {
+        const int error = WSAGetLastError();
+        if (error != WSAEWOULDBLOCK && error != WSAEINPROGRESS && error != WSAEINVAL)
+        {
+            return false;
+        }
+
+        fd_set writable;
+        fd_set failed;
+        FD_ZERO(&writable);
+        FD_ZERO(&failed);
+        FD_SET(client, &writable);
+        FD_SET(client, &failed);
+        timeval timeout{};
+        timeout.tv_sec = 0;
+        timeout.tv_usec = kConnectPollMicros;
+        const int ready = select(0, nullptr, &writable, &failed, &timeout);
+        if (ready <= 0 || FD_ISSET(client, &failed))
+        {
+            return false;
+        }
+
+        int socketError = 0;
+        int socketErrorSize = sizeof(socketError);
+        if (getsockopt(client, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&socketError), &socketErrorSize) != 0 ||
+            socketError != 0)
+        {
+            return false;
+        }
+    }
+
+    nonBlocking = 0;
+    if (ioctlsocket(client, FIONBIO, &nonBlocking) != 0)
+    {
+        return false;
+    }
+
+    const DWORD ioTimeoutMs = 2000;
+    setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&ioTimeoutMs), sizeof(ioTimeoutMs));
+    setsockopt(client, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&ioTimeoutMs), sizeof(ioTimeoutMs));
+    return true;
+}
 
 SOCKET ConnectRepl()
 {
-    for (int attempt = 0; attempt < 80; ++attempt)
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(kReplPort);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+
+    for (int attempt = 0; attempt < 50; ++attempt)
     {
         SOCKET client = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (client == INVALID_SOCKET)
         {
             return INVALID_SOCKET;
         }
-
-        sockaddr_in address{};
-        address.sin_family = AF_INET;
-        address.sin_port = htons(kReplPort);
-        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-        if (connect(client, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0)
+        if (TryConnect(client, address))
         {
             return client;
         }
