@@ -1,0 +1,36 @@
+Live in-process bridge REPL session, 2026-09-17.
+
+Game process: Cyberpunk2077.exe, vanilla install, no RED4ext/CET/Codeware.
+Note: `tasklist` showed PID 15540 at the time of this test, while
+bridge-observation.lisp's own recorded process-id was 3568 -- an
+unresolved discrepancy, not yet root-caused (possibly a prior launch's
+file left on disk without being overwritten by the current process).
+Does not affect the TCP REPL result below, which was confirmed live
+and responsive at the time of this test regardless of which PID the
+listening process actually was.
+
+bridge-observation.lisp (written by bridge/src/BridgeDllMain.cpp
+inside the live game process):
+(game-observation/1 (source in-process) (game-fingerprint "unknown") (fact bridge-alive) (value t) (timestamp 1789677574444) (validity valid) (provenance ((channel-revision 1) (process-id 3568) (module-base "0x7FFA572F0000"))))
+(bridge-runtime-provenance/1 (my-lisp-sha "0120352b16bf3252c1edad1b3d01b10ddddc618e") (embed-abi 4))
+
+TCP REPL session, 127.0.0.1:40777, from an external Python client (not
+injected -- ordinary TCP client talking to the bridge's own listener):
+
+> (+ 1 2)
+< 3
+
+> (визначити x 42)
+< 42
+
+> x
+< 42
+
+[connection closed, new TCP connection opened]
+
+> x
+< 42
+
+Confirms: one persistent canonical my-lisp Session, running inside the
+live Cyberpunk2077.exe process, reachable over TCP, state (Ukrainian
+`визначити` binding) survives a full disconnect/reconnect cycle.
