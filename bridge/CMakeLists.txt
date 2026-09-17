@@ -33,6 +33,19 @@ if(MY_LISP_NATIVE_LIBS STREQUAL "")
   message(FATAL_ERROR "MY_LISP_NATIVE_LIBS must come from rustc --print native-static-libs")
 endif()
 
+set(MY_LISP_SHA "" CACHE STRING "Exact 40-hex runtime/my-lisp gitlink revision")
+if(NOT MY_LISP_SHA MATCHES "^[0-9a-fA-F]{40}$")
+  message(FATAL_ERROR "MY_LISP_SHA must be the exact pinned runtime/my-lisp commit")
+endif()
+
+set(MY_LISP_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${MY_LISP_GENERATED_DIR}")
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/MyLispBuildProvenance.hpp.in"
+  "${MY_LISP_GENERATED_DIR}/MyLispBuildProvenance.hpp"
+  @ONLY
+)
+
 # Reuse the repo's already-proven mechanism-only loopback transport from the
 # historical adapter.  The bridge does NOT reuse the RED4ext adapter itself:
 # only LocalReplServer/RequestQueue, which contain Winsock + queue mechanics
@@ -54,6 +67,7 @@ target_include_directories(
   PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../adapter/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/my-lisp/crates/my-lisp-embed/include"
+    "${MY_LISP_GENERATED_DIR}"
 )
 target_link_libraries(version PRIVATE "${MY_LISP_EMBED_STATIC}" ws2_32)
 
