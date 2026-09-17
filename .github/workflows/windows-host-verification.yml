@@ -173,7 +173,8 @@ jobs:
         run: >-
           & .\tools\tests\ConsumerConformanceContractTest.ps1
           -MyLispExe .\runtime\my-lisp\target\release\my-lisp.exe
-          -BridgeDll .\bridge\build\Release\version.dll
+          -BridgeDll .\bridge\runtime-stage\version.dll
+          -ProvenanceFile .\runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt
           -Corpus .\bridge\tests\fixtures\consumer-conformance-v0.json
           -Report .\bridge\build\Release\consumer-conformance-report.lisp
 
