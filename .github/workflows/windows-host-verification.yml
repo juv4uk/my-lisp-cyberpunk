@@ -35,18 +35,27 @@ jobs:
           $lines = @(Get-Content $provenance)
           $staticLine = @($lines | Where-Object { $_ -like 'static-artifact=*' })
           $nativeLine = @($lines | Where-Object { $_ -like 'native-static-libs=*' })
-          if ($staticLine.Count -ne 1 -or $nativeLine.Count -ne 1) {
-            throw "canonical build provenance does not expose exactly one static artifact/native input set"
+          $shaLine = @($lines | Where-Object { $_ -like 'my-lisp-sha=*' })
+          $abiLine = @($lines | Where-Object { $_ -like 'embed-abi=*' })
+          if ($staticLine.Count -ne 1 -or $nativeLine.Count -ne 1 -or
+              $shaLine.Count -ne 1 -or $abiLine.Count -ne 1) {
+            throw "canonical build provenance does not expose exactly one static artifact/native/SHA/ABI input set"
           }
           $static = $staticLine[0].Substring('static-artifact='.Length).Trim()
           $native = $nativeLine[0].Substring('native-static-libs='.Length).Trim()
-          if (-not (Test-Path $static) -or [string]::IsNullOrWhiteSpace($native)) {
-            throw "canonical static link inputs are incomplete"
+          $sha = $shaLine[0].Substring('my-lisp-sha='.Length).Trim()
+          $abi = $abiLine[0].Substring('embed-abi='.Length).Trim()
+          if (-not (Test-Path $static) -or [string]::IsNullOrWhiteSpace($native) -or
+              $sha -notmatch '^[0-9a-f]{40}$' -or $abi -notmatch '^[0-9]+$') {
+            throw "canonical static link/provenance inputs are incomplete"
           }
           cmake -S bridge -B bridge/build `
             "-DMY_LISP_EMBED_STATIC=$static" `
-            "-DMY_LISP_NATIVE_LIBS=$native"
+            "-DMY_LISP_NATIVE_LIBS=$native" `
+            "-DMY_LISP_SHA=$sha"
           if ($LASTEXITCODE -ne 0) { throw "vanilla bridge configure failed" }
+          "CYBERPUNK_EXPECTED_MY_LISP_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CYBERPUNK_EXPECTED_EMBED_ABI=$abi" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build vanilla bridge and harness
         run: cmake --build bridge/build --config Release --parallel 4
@@ -66,6 +75,8 @@ jobs:
         run: >-
           & .\bridge\build\Release\bridge-load-test.exe
           .\bridge\build\Release\version.dll
+          $env:CYBERPUNK_EXPECTED_MY_LISP_SHA
+          $env:CYBERPUNK_EXPECTED_EMBED_ABI
 
       - name: Parse bridge runtime evidence with canonical my-lisp
         shell: pwsh
