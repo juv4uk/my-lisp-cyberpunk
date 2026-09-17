@@ -7,6 +7,9 @@ param(
     [string]$BridgeDll,
 
     [Parameter(Mandatory = $true)]
+    [string]$ProvenanceFile,
+
+    [Parameter(Mandatory = $true)]
     [string]$Corpus,
 
     [Parameter(Mandatory = $true)]
@@ -123,14 +126,12 @@ function Invoke-BridgeEval($Channel, [string]$Source) {
     return [pscustomobject]@{ Status = 'ok'; Value = $response; Diagnostic = '' }
 }
 
-function Read-Provenance([string]$BridgePath) {
-    $directory = Split-Path -Parent (Resolve-Path $BridgePath)
-    $path = Join-Path $directory 'cyberpunk-my-lisp-provenance.txt'
-    if (-not (Test-Path $path)) {
-        throw "canonical provenance missing beside bridge: $path"
+function Read-Provenance([string]$Path) {
+    if (-not (Test-Path $Path)) {
+        throw "canonical build provenance missing: $Path"
     }
     $values = @{}
-    foreach ($line in Get-Content $path) {
+    foreach ($line in Get-Content $Path) {
         if ($line -match '^([^=]+)=(.*)$') {
             $values[$Matches[1]] = $Matches[2]
         }
@@ -138,13 +139,14 @@ function Read-Provenance([string]$BridgePath) {
     $sha = [string]$values['my-lisp-sha']
     $abi = [string]$values['embed-abi']
     if ($sha -notmatch '^[0-9a-f]{40}$' -or $abi -notmatch '^[0-9]+$') {
-        throw 'canonical provenance does not contain an exact SHA and numeric ABI'
+        throw 'canonical build provenance does not contain an exact SHA and numeric ABI'
     }
     return [pscustomobject]@{ Sha = $sha; Abi = $abi }
 }
 
 if (-not (Test-Path $MyLispExe)) { throw "canonical my-lisp executable missing: $MyLispExe" }
 if (-not (Test-Path $BridgeDll)) { throw "bridge DLL missing: $BridgeDll" }
+if (-not (Test-Path $ProvenanceFile)) { throw "canonical build provenance missing: $ProvenanceFile" }
 if (-not (Test-Path $Corpus)) { throw "conformance corpus missing: $Corpus" }
 
 $corpusData = Get-Content -Raw $Corpus | ConvertFrom-Json
@@ -155,7 +157,9 @@ if ($null -eq $corpusData.cases -or $corpusData.cases.Count -eq 0) {
     throw 'conformance corpus has no cases'
 }
 
-$provenance = Read-Provenance $BridgeDll
+# Provenance is build/test evidence, deliberately supplied independently from
+# the portable runtime artifact. The final mod remains a one-file version.dll.
+$provenance = Read-Provenance $ProvenanceFile
 $canonicalProcess = $null
 $canonicalClient = $null
 $canonicalChannel = $null
@@ -173,8 +177,8 @@ try {
     $canonicalClient = Connect-Loopback 40778
     $canonicalChannel = Open-Utf8LineChannel $canonicalClient
 
-    # Load the exact same vanilla bridge artifact that #45 verifies. Loading
-    # it starts the bridge-owned persistent canonical Session on 40777.
+    # Load the exact staged portable bridge artifact. Loading it starts the
+    # bridge-owned persistent canonical Session on 40777.
     $bridgePath = (Resolve-Path $BridgeDll).Path
     $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridgePath)
     $shutdownPointer = [System.Runtime.InteropServices.NativeLibrary]::GetExport($bridgeHandle, 'MyLispBridgeShutdown')
@@ -235,7 +239,7 @@ try {
   (my-lisp-sha "$($provenance.Sha)")
   (embed-abi $($provenance.Abi))
   (oracle-runner "my-lisp-cli --protocol=sexpr")
-  (consumer-runner "version.dll -> my_lisp_embed")
+  (consumer-runner "portable version.dll -> static my-lisp-embed")
   (cases
     $body))
 "@
