@@ -47,6 +47,16 @@ jobs:
           & .\bridge\build\Release\bridge-load-test.exe
           .\bridge\build\Release\version.dll
 
+      - name: Parse bridge runtime evidence with canonical my-lisp
+        shell: pwsh
+        run: |
+          $oracle = & .\runtime\my-lisp\target\release\my-lisp.exe --oracle-check .\bridge\build\Release\bridge-observation.lisp
+          $text = $oracle -join "`n"
+          Write-Output $text
+          if ($LASTEXITCODE -ne 0 -or $text -notmatch '\(outcome valid\)') {
+            throw "bridge-observation.lisp is not valid canonical my-lisp data"
+          }
+
       - name: Configure RED4ext adapter
         run: cmake -S adapter -B adapter/build
 
