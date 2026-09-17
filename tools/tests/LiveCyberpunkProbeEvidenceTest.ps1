@@ -64,6 +64,9 @@ function Invoke-ExpectedFailure {
         [Parameter(Mandatory)][string]$ExpectedPattern
     )
 
+    # This is a new pwsh process, so a flat argv array containing named
+    # parameter tokens is intentional here. Direct script invocation below
+    # uses a hashtable splat instead.
     $output = & $pwshExe -NoProfile -ExecutionPolicy Bypass -File $verifier @Arguments 2>&1
     $exit = $LASTEXITCODE
     $text = $output -join "`n"
@@ -106,7 +109,16 @@ try {
         -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $childScript, '-Dll', $installed) `
         -RedirectStandardOutput $childOut -RedirectStandardError $childErr -PassThru
 
-    $common = @(
+    $commonDirect = @{
+        GameDir = $root
+        BridgeArtifact = $BridgeDll
+        ProcessId = $child.Id
+        MyLispExe = $MyLispExe
+        HarnessMode = $true
+        ExpectedProcessPath = $selfExe
+        ObservationTimeoutSeconds = 30
+    }
+    $commonArgs = @(
         '-GameDir', $root,
         '-BridgeArtifact', $BridgeDll,
         '-ProcessId', [string]$child.Id,
@@ -116,7 +128,7 @@ try {
         '-ObservationTimeoutSeconds', '30'
     )
 
-    & $verifier @common -EvidenceOut $evidence
+    & $verifier @commonDirect -EvidenceOut $evidence
     if ($LASTEXITCODE -ne 0) {
         throw "live probe verifier returned non-zero exit $LASTEXITCODE"
     }
@@ -194,14 +206,14 @@ try {
     Set-Content -LiteralPath $observation -Value $tamperedObservation -Encoding utf8 -NoNewline
     Invoke-ExpectedFailure `
         -Label 'stale or wrong-PID observation' `
-        -Arguments $common `
+        -Arguments $commonArgs `
         -ExpectedPattern '(?i)(observation.*process-id|process-id.*observation)'
     Set-Content -LiteralPath $observation -Value $originalObservation -Encoding utf8 -NoNewline
 
     New-Item -ItemType Directory -Path (Join-Path $root 'red4ext') -Force | Out-Null
     Invoke-ExpectedFailure `
         -Label 'forbidden third-party runtime marker' `
-        -Arguments $common `
+        -Arguments $commonArgs `
         -ExpectedPattern '(?i)(vanilla boundary|forbidden runtime|RED4ext)'
     Remove-Item -LiteralPath (Join-Path $root 'red4ext') -Recurse -Force
 
