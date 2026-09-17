@@ -169,10 +169,12 @@ int main(int argc, char** argv)
     std::printf("LoadLibrary OK, module=%p\n", static_cast<void*>(h));
 
     using GetSizeFn = DWORD(WINAPI*)(LPCSTR, LPDWORD);
+    using ShutdownFn = BOOL(WINAPI*)(DWORD);
     auto getSize = reinterpret_cast<GetSizeFn>(GetProcAddress(h, "GetFileVersionInfoSizeA"));
-    if (getSize == nullptr)
+    auto shutdown = reinterpret_cast<ShutdownFn>(GetProcAddress(h, "MyLispBridgeShutdown"));
+    if (getSize == nullptr || shutdown == nullptr)
     {
-        std::fprintf(stderr, "GetProcAddress(GetFileVersionInfoSizeA) failed\n");
+        std::fprintf(stderr, "required bridge exports are missing\n");
         FreeLibrary(h);
         WSACleanup();
         return 4;
@@ -182,12 +184,27 @@ int main(int argc, char** argv)
     const DWORD size = getSize(argv[1], &handle);
     std::printf("forwarded GetFileVersionInfoSizeA(%s) = %lu\n", argv[1], size);
 
+    auto StopAndUnload = [&](SOCKET client) -> bool
+    {
+        if (client != INVALID_SOCKET)
+        {
+            closesocket(client);
+        }
+        const bool stopped = shutdown(5000) == TRUE;
+        if (!stopped)
+        {
+            std::fprintf(stderr, "MyLispBridgeShutdown timed out\n");
+        }
+        FreeLibrary(h);
+        WSACleanup();
+        return stopped;
+    };
+
     SOCKET client = ConnectRepl();
     if (client == INVALID_SOCKET)
     {
         std::fprintf(stderr, "canonical REPL did not appear on 127.0.0.1:%u\n", kReplPort);
-        FreeLibrary(h);
-        WSACleanup();
+        StopAndUnload(INVALID_SOCKET);
         return 5;
     }
 
@@ -197,9 +214,7 @@ int main(int argc, char** argv)
         !Exchange(client, "(define twice (lambda (value) (+ value value)))", ignored) ||
         !RequireReply(client, "(twice 21)", "42"))
     {
-        closesocket(client);
-        FreeLibrary(h);
-        WSACleanup();
+        StopAndUnload(client);
         return 6;
     }
 
@@ -207,22 +222,19 @@ int main(int argc, char** argv)
     if (!Exchange(client, "(car 5)", error) || error.rfind("error:", 0) != 0)
     {
         std::fprintf(stderr, "expected canonical error, got '%s'\n", error.c_str());
-        closesocket(client);
-        FreeLibrary(h);
-        WSACleanup();
+        StopAndUnload(client);
         return 7;
     }
     if (!RequireReply(client, "(+ 20 22)", "42"))
     {
-        closesocket(client);
-        FreeLibrary(h);
-        WSACleanup();
+        StopAndUnload(client);
         return 8;
     }
 
-    closesocket(client);
-    FreeLibrary(h);
-    WSACleanup();
-    std::printf("persistent canonical REPL witness OK\n");
+    if (!StopAndUnload(client))
+    {
+        return 9;
+    }
+    std::printf("persistent canonical REPL + shutdown witness OK\n");
     return 0;
 }
