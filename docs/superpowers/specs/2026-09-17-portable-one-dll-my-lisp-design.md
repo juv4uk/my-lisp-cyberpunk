@@ -12,9 +12,9 @@ The production vanilla Cyberpunk mod is deployable as one runtime artifact:
 Cyberpunk 2077/bin/x64/version.dll
 ```
 
-That DLL contains the canonical `my-lisp` evaluator/runtime statically. A player does not install or copy `my_lisp_embed.dll`, `my-lisp.exe`, Rust/Cargo/Git, CET, RED4ext, or Codeware.
+That DLL contains the canonical `my-lisp` evaluator/runtime statically. A player does not install or copy `my_lisp_embed.dll`, `my-lisp.exe`, `version-original.dll`, Rust/Cargo/Git, CET, RED4ext, or Codeware.
 
-Portability changes linkage and packaging only. It must not create a second evaluator, parser, semantic registry, language contract, or Cyberpunk-owned copy of Lisp semantics.
+Portability changes linkage, forwarding, and provenance packaging only. It must not create a second evaluator, parser, semantic registry, language contract, or Cyberpunk-owned copy of Lisp semantics.
 
 ## Current proven boundary
 
@@ -25,7 +25,7 @@ Cyberpunk/standalone process
         |
         v
 version.dll
-  |- Windows version.dll forwarding
+  |- Windows version.dll forwarding via adjacent version-original.dll
   |- LocalReplServer / RequestQueue
   `- CanonicalReplHost
         |
@@ -45,7 +45,7 @@ The same bridge witness already proves:
 - exact pinned my-lisp SHA + accepted embed ABI provenance;
 - canonical parsing of runtime evidence.
 
-The one-DLL work preserves those claims and removes only the adjacent runtime DLL dependency.
+The one-DLL work preserves those claims while removing all adjacent runtime dependencies.
 
 ## Selected approach
 
@@ -66,6 +66,22 @@ No Cyberpunk-specific API or policy enters upstream `my-lisp`.
 
 Cyberpunk CMake consumes the static library built from its exact pinned `runtime/my-lisp` gitlink. `CanonicalReplHost` stops dynamically loading/resolving `my_lisp_embed.dll`; instead it calls the same declared C ABI symbols directly.
 
+### Forwarding: load the real system `version.dll` directly
+
+The current proxy requires an adjacent copy named `version-original.dll`. A true one-file mod cannot keep that dependency.
+
+The proxy will resolve the genuine Windows library by an **absolute System32 path** obtained from Windows itself (for example `GetSystemDirectoryW` + `version.dll`, optionally with the narrowest suitable `LoadLibraryExW` flags). It must never resolve through the normal application-directory search path, which would recurse back into the proxy.
+
+The system DLL remains Windows-owned; it is never copied or packaged by the mod.
+
+### Provenance: embed build facts into `version.dll`
+
+The current bridge reads an adjacent `cyberpunk-my-lisp-provenance.txt`. A one-file runtime cannot require that file.
+
+During build, the exact `runtime/my-lisp` gitlink SHA is injected into the bridge as generated build metadata/compile definition. The ABI remains checked against the existing upstream header and the actual linked `my_lisp_embed_abi_version()` result.
+
+The generated provenance file may still exist as a **CI/build artifact**, but runtime startup must not read it.
+
 Target runtime:
 
 ```text
@@ -73,8 +89,9 @@ Cyberpunk2077.exe
         |
         v
 version.dll
-  |- system version.dll forwarding
+  |- forwards to absolute %SystemRoot%/System32/version.dll
   |- bridge lifecycle
+  |- embedded build provenance (exact my-lisp SHA)
   |- existing LocalReplServer / RequestQueue
   `- statically linked my-lisp-embed
        |- canonical parser
@@ -85,13 +102,13 @@ version.dll
 
 ## Why not the alternatives
 
-### Bundled two-file runtime
+### Bundled multi-file runtime
 
-Keeping `version.dll + my_lisp_embed.dll` is already functional but does not satisfy the owner's portability requirement. It remains useful only as historical/transition evidence.
+Keeping `version.dll + my_lisp_embed.dll`, or `version.dll + version-original.dll`, is already workable but does not satisfy the owner's portability requirement. These remain useful only as historical/transition evidence.
 
 ### Rewrite the whole bridge in Rust
 
-A Rust `cdylib` could also contain `my-lisp` directly, but replacing the already-proven C++ `version.dll` forwarding/lifecycle path would enlarge scope without improving semantic authority. The bridge is already mechanism-only; static linking is the smallest architectural change.
+A Rust `cdylib` could also contain `my-lisp` directly, but replacing the already-proven C++ `version.dll` forwarding/lifecycle path would enlarge scope without improving semantic authority. The bridge is already mechanism-only; static linking plus direct System32 forwarding is the smallest architectural change.
 
 ## Authority and provenance
 
@@ -107,7 +124,7 @@ linkage=static
 
 No independent version number or semantic manifest is introduced in Cyberpunk.
 
-The final runtime observation must still report the same exact SHA and ABI that built the embedded code.
+The exact SHA is compiled into the bridge from the gitlink at build time. At runtime the bridge records that compiled SHA together with the ABI actually returned by the statically linked embed implementation.
 
 ## Build flow
 
@@ -120,10 +137,12 @@ runtime/my-lisp @ exact gitlink
         |      |- dynamic artifact (kept for upstream compatibility tests)
         |      `- static library artifact
         |
+        +-- extract exact gitlink SHA for build metadata
         v
 bridge/CMake
         |
         +-- compile bridge C++
+        +-- inject exact my-lisp SHA build metadata
         +-- link my-lisp-embed static library
         +-- link required Windows/Rust native dependencies
         v
@@ -138,14 +157,17 @@ Artifact discovery must be based on actual Cargo output/build evidence, not a pe
 
 The existing bridge-owned worker thread remains the Session owner. On that thread:
 
-1. call `my_lisp_embed_abi_version()` directly;
+1. call the statically linked `my_lisp_embed_abi_version()` directly;
 2. verify it equals the upstream header constant;
-3. call `my_lisp_embed_session_new()`;
-4. start the existing loopback REPL;
-5. serialize all `my_lisp_embed_eval()` calls on that owner thread;
-6. on controlled shutdown, stop transport then call `my_lisp_embed_session_free()` exactly once.
+3. record the compiled exact my-lisp SHA + accepted ABI as runtime evidence;
+4. call `my_lisp_embed_session_new()`;
+5. start the existing loopback REPL;
+6. serialize all `my_lisp_embed_eval()` calls on that owner thread;
+7. on controlled shutdown, stop transport then call `my_lisp_embed_session_free()` exactly once.
 
 The removal of `LoadLibrary/GetProcAddress/FreeLibrary` for the embed runtime must not change Session ownership or shutdown ordering.
+
+The version-proxy forwarding path separately loads only the absolute Windows System32 `version.dll`; it must never load an adjacent `version-original.dll`.
 
 ## RED -> GREEN evidence
 
@@ -166,41 +188,53 @@ A native Windows/MSVC witness using the existing header links the generated stat
 
 ### Cyberpunk RED
 
-The existing bridge currently fails when `my_lisp_embed.dll` is absent beside `version.dll`.
+The existing bridge currently fails its full runtime contract if any of these adjacent files are absent:
+
+```text
+my_lisp_embed.dll
+version-original.dll
+cyberpunk-my-lisp-provenance.txt
+```
+
+That is the correct pre-change RED for the one-file requirement.
 
 ### Cyberpunk GREEN
 
-Run the same bridge harness with **no adjacent `my_lisp_embed.dll` and no `my-lisp.exe`**. It must still prove:
+Run the same bridge harness in a clean staging directory containing **only `version.dll` as the mod runtime artifact**. It must still prove:
 
 - `LoadLibrary(version.dll)` succeeds;
-- Windows version forwarding succeeds;
-- REPL appears on loopback;
+- forwarding reaches the genuine System32 `version.dll` without an adjacent copy;
+- REPL appears on loopback with no adjacent `my_lisp_embed.dll`;
 - canonical Ukrainian definition/closure persists across reconnects;
 - language error does not destroy the Session;
 - controlled early and normal shutdown succeed;
-- provenance reports exact SHA + ABI + static linkage;
-- canonical `--oracle-check` accepts runtime evidence.
+- runtime evidence reports exact compiled SHA + actual ABI + static linkage;
+- canonical `--oracle-check` accepts generated runtime evidence.
 
 Additionally inspect `version.dll` dependencies using an existing Windows tool (`dumpbin /DEPENDENTS` or equivalent runner-provided mechanism) and fail if `my_lisp_embed.dll` remains a dynamic dependency.
 
+A filesystem assertion must fail if the staged runtime package contains `my_lisp_embed.dll`, `version-original.dll`, or `my-lisp.exe`.
+
 ## Packaging contract
 
-The final production runtime package for the mod contains exactly the mod binary:
+The final production runtime package for the mod contains exactly:
 
 ```text
 version.dll
 ```
 
-Build/debug evidence files may exist in CI artifacts, but they are not runtime dependencies and are not installed into the game directory.
+Runtime-generated observation/log files are outputs, not installation dependencies.
 
-The system Windows `version.dll` is not packaged by the mod; the proxy continues forwarding to the real system implementation through the already-proven bridge mechanism.
+Build/debug/provenance files may exist in CI artifacts, but they are not installed into the game directory and are not required for startup.
+
+The genuine Windows `version.dll` remains in `%SystemRoot%\System32` and is loaded by absolute path.
 
 ## Compatibility
 
 - `my-lisp-embed` keeps `cdylib` for existing consumers.
 - `rlib` remains available.
 - C ABI/header remain unchanged for this feature.
-- PR #45's dynamic witness remains useful during transition but the final Cyberpunk runtime witness must exercise static linkage.
+- PR #45's dynamic witness remains useful as transition/history, but the final Cyberpunk runtime witness must exercise static linkage and direct System32 forwarding.
 - PR #46 consumer conformance should run against the same one-file bridge after this change; its canonical oracle may still use `my-lisp.exe` in CI because that executable is a **test oracle**, not a shipped game dependency.
 
 ## Non-goals
@@ -223,14 +257,16 @@ Fail closed if:
 - the static library cannot be traced to the pinned gitlink;
 - CMake accidentally links a different embed implementation;
 - `version.dll` still requires `my_lisp_embed.dll` at runtime;
+- startup still requires `version-original.dll` or a provenance sidecar;
+- the absolute System32 forwarding target cannot be resolved;
 - the canonical Session/reconnect/error/lifecycle witnesses regress.
 
-A failed static-link experiment must not be hidden by falling back silently to dynamic `LoadLibrary(my_lisp_embed.dll)`.
+A failed static-link experiment must not be hidden by falling back silently to dynamic `LoadLibrary(my_lisp_embed.dll)` or an adjacent `version-original.dll`.
 
 ## Completion claim
 
 Only after the static one-file artifact passes the standalone bridge witnesses may we claim:
 
-> `version.dll` contains the canonical my-lisp runtime and is portable without an external Lisp runtime DLL.
+> `version.dll` contains the canonical my-lisp runtime and is portable without an external Lisp/runtime/forwarding sidecar.
 
 Only after #31/#24 repeats that artifact inside the actual `Cyberpunk2077.exe` process may we claim the final production mod is proven in-game.
