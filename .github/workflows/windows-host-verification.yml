@@ -57,6 +57,15 @@ jobs:
             throw "bridge-observation.lisp is not valid canonical my-lisp data"
           }
 
+      - name: Prove canonical CLI and bridge Session conformance
+        shell: pwsh
+        run: >-
+          & .\tools\tests\ConsumerConformanceContractTest.ps1
+          -MyLispExe .\runtime\my-lisp\target\release\my-lisp.exe
+          -BridgeDll .\bridge\build\Release\version.dll
+          -Corpus .\bridge\tests\fixtures\consumer-conformance-v0.json
+          -Report .\bridge\build\Release\consumer-conformance-report.lisp
+
       - name: Configure RED4ext adapter
         run: cmake -S adapter -B adapter/build
 
