@@ -47,11 +47,8 @@ $BridgeDll = (Resolve-Path -LiteralPath $BridgeDll).Path
 $MyLispExe = (Resolve-Path -LiteralPath $MyLispExe).Path
 $selfExe = (Get-Process -Id $PID).Path
 $pwshExe = $selfExe
-
-$root = Join-Path $env:RUNNER_TEMP "cp31-live-probe-$([guid]::NewGuid())"
-if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
-    $root = Join-Path $env:TEMP "cp31-live-probe-$([guid]::NewGuid())"
-}
+$tempBase = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) { $env:TEMP } else { $env:RUNNER_TEMP }
+$root = Join-Path $tempBase "cp31-live-probe-$([guid]::NewGuid())"
 $gameBin = Join-Path $root 'bin\x64'
 $installed = Join-Path $gameBin 'version.dll'
 $observation = Join-Path $gameBin 'bridge-observation.lisp'
@@ -160,9 +157,18 @@ try {
     $foreign = Join-Path $root 'foreign-version.dll'
     Copy-Item -LiteralPath $BridgeDll -Destination $foreign
     [System.IO.File]::AppendAllText($foreign, 'tamper')
+    $wrongTrustArgs = @(
+        '-GameDir', $root,
+        '-BridgeArtifact', $foreign,
+        '-ProcessId', [string]$child.Id,
+        '-MyLispExe', $MyLispExe,
+        '-HarnessMode',
+        '-ExpectedProcessPath', $selfExe,
+        '-ObservationTimeoutSeconds', '3'
+    )
     Invoke-ExpectedFailure `
         -Label 'wrong trust anchor' `
-        -Arguments ($common | ForEach-Object { $_ }) + @('-BridgeArtifact', $foreign) `
+        -Arguments $wrongTrustArgs `
         -ExpectedPattern '(?i)(foreign|tampered|SHA-256|identity|boundary)'
 
     $wrongPathArgs = @(
@@ -189,14 +195,14 @@ try {
     Invoke-ExpectedFailure `
         -Label 'stale or wrong-PID observation' `
         -Arguments $common `
-        -ExpectedPattern '(?i)observation.*process-id|process-id.*observation'
+        -ExpectedPattern '(?i)(observation.*process-id|process-id.*observation)'
     Set-Content -LiteralPath $observation -Value $originalObservation -Encoding utf8 -NoNewline
 
     New-Item -ItemType Directory -Path (Join-Path $root 'red4ext') -Force | Out-Null
     Invoke-ExpectedFailure `
         -Label 'forbidden third-party runtime marker' `
         -Arguments $common `
-        -ExpectedPattern '(?i)vanilla boundary|forbidden runtime|RED4ext'
+        -ExpectedPattern '(?i)(vanilla boundary|forbidden runtime|RED4ext)'
     Remove-Item -LiteralPath (Join-Path $root 'red4ext') -Recurse -Force
 
 } finally {
