@@ -1,33 +1,27 @@
-// CP-PROBE-INPROCESS-V0 (#31): the minimal in-process bridge.
+// Vanilla in-process bridge for Cyberpunk 2077.
 //
-// Hard constraints from the issue, followed literally:
-//   - no RED4ext/CET/Codeware runtime dependency (this IS the loader,
-//     using the same version.dll proxy-load trick CET used, but our
-//     own code, nothing borrowed);
-//   - no evaluator, no Lisp policy, no scenario branching in this DLL
-//     -- it emits one raw fact and stops;
-//   - no raw game pointers cross the boundary -- the only fact this
-//     first cut emits is about the bridge's OWN presence (module base,
-//     process id), not anything read from game/engine state;
-//   - no mutating game actions.
+// Hard constraints:
+//   - no RED4ext/CET/Codeware runtime dependency;
+//   - no evaluator, parser, Lisp policy or gameplay policy in this DLL;
+//   - canonical Lisp state is owned by the exact pinned my-lisp-embed ABI;
+//   - socket workers never evaluate Lisp; one bridge-owned thread creates,
+//     evaluates and frees the one persistent canonical Session;
+//   - no raw game pointers or mutating game actions in this milestone.
 //
 // Lesson already paid for in this repo's own history
 // (docs/deep-penetration-roadmap-2026-09-10.md, problem 1: "RTTI call
-// during Load"): DllMain must do nothing beyond spawning a thread.
-// Anything heavier belongs on that thread, running after the loader
-// has released its lock.
+// during Load"): DllMain does nothing beyond spawning a thread.
+// Anything heavier belongs on that thread after the loader lock is released.
 //
-// Export forwarding: MSVC's linker does not resolve plain
-// `Name=OtherDll.Name` .def entries as true PE export forwarders the
-// way this was first attempted (LNK2001, unresolved external) --
-// instead each real version.dll export is a thin function that loads
-// the genuine system DLL (deployed alongside as "version-original.dll")
-// once and tail-calls through a real function pointer with the exact
-// signature from <winver.h>, so no game subsystem that legitimately
-// needs real version.dll behavior can be broken by this proxy.
+// Export forwarding: each real version.dll export is a thin function that
+// loads the genuine system DLL (deployed alongside as "version-original.dll")
+// once and calls through its exact <winver.h> signature.
+
+#include "BridgeRuntime.hpp"
 
 #include <windows.h>
 #include <winver.h>
+
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -94,19 +88,31 @@ std::wstring ObservationOutputPath()
     return path;
 }
 
-DWORD WINAPI BridgeThread(LPVOID)
+DWORD WINAPI BridgeThread(LPVOID parameter)
 {
-    // Give the loader time to finish resolving imports for every DLL
-    // in the load chain before we do anything, even file I/O.
+    // Give the loader time to finish resolving imports for every DLL in the
+    // load chain before file I/O, Winsock, or my-lisp-embed work begins.
     Sleep(2000);
 
-    HMODULE self = nullptr;
-    GetModuleHandleExW(
-        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        reinterpret_cast<LPCWSTR>(&BridgeThread),
-        &self);
+    // Keep this DLL resident even if a controlled host drops its original
+    // LoadLibrary reference while shutdown is finishing.  The final release
+    // is atomic with thread exit below.
+    HMODULE pinnedSelf = nullptr;
+    if (!GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+            reinterpret_cast<LPCWSTR>(&BridgeThread),
+            &pinnedSelf))
+    {
+        return 10;
+    }
 
-    const auto moduleBase = reinterpret_cast<uintptr_t>(self);
+    HMODULE ownerModule = static_cast<HMODULE>(parameter);
+    if (ownerModule == nullptr)
+    {
+        ownerModule = pinnedSelf;
+    }
+
+    const auto moduleBase = reinterpret_cast<uintptr_t>(ownerModule);
     const DWORD pid = GetCurrentProcessId();
     const long long timestamp = []() -> long long
     {
@@ -120,11 +126,8 @@ DWORD WINAPI BridgeThread(LPVOID)
     FILE* f = nullptr;
     if (_wfopen_s(&f, outPath.c_str(), L"w") == 0 && f != nullptr)
     {
-        // game-observation/1 (docs/observation-contract-v0.md): this
-        // first fact is deliberately about the bridge's own successful
-        // load, not any game/engine state -- #31's evidence point 1
-        // ("bridge реально завантажений лише нашим механізмом") is
-        // exactly this record's entire content.
+        // First observation remains deliberately about the bridge's own
+        // successful load, not game/engine state.
         fprintf(f,
                 "(game-observation/1 (source in-process) (game-fingerprint \"unknown\") "
                 "(fact bridge-alive) (value t) (timestamp %lld) (validity valid) "
@@ -133,7 +136,12 @@ DWORD WINAPI BridgeThread(LPVOID)
         fclose(f);
     }
 
-    return 0;
+    const DWORD exitCode = cyberpunk_bridge::RunCanonicalRepl(ownerModule);
+
+    // This releases the worker's self-pin and exits atomically, so a caller
+    // that used MyLispBridgeShutdown may safely release its own DLL reference.
+    FreeLibraryAndExitThread(pinnedSelf, exitCode);
+    return exitCode; // unreachable; keeps the thread procedure type explicit.
 }
 
 } // namespace
@@ -143,9 +151,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
     if (reason == DLL_PROCESS_ATTACH)
     {
         DisableThreadLibraryCalls(hModule);
-        HANDLE thread = CreateThread(nullptr, 0, BridgeThread, nullptr, 0, nullptr);
+        HANDLE thread = CreateThread(nullptr, 0, BridgeThread, hModule, 0, nullptr);
         if (thread != nullptr)
         {
+            // The bridge thread self-pins the module after loader-lock release;
+            // the OS thread handle itself does not need to remain open here.
             CloseHandle(thread);
         }
     }
@@ -153,9 +163,18 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 }
 
 // ---------------------------------------------------------------------
-// Real version.dll export surface. Each is a thin forward to the real
-// system DLL, using its actual <winver.h> signature -- never
-// implemented here, only relayed.
+// Bridge control surface.  This is host lifecycle mechanism only; it exposes
+// no Lisp semantics and performs no evaluation itself.
+// ---------------------------------------------------------------------
+
+extern "C" BOOL WINAPI MyLispBridgeShutdown(DWORD timeoutMs)
+{
+    return cyberpunk_bridge::ShutdownCanonicalRepl(timeoutMs) ? TRUE : FALSE;
+}
+
+// ---------------------------------------------------------------------
+// Real version.dll export surface. Each is a thin forward to the real system
+// DLL, using its actual <winver.h> signature -- never implemented here.
 // ---------------------------------------------------------------------
 
 extern "C" {
