@@ -28,6 +28,35 @@ jobs:
         # this binary's --oracle-check; it must exist before ctest runs.
         run: ./tools/build-my-lisp-runtime.ps1
 
+      - name: Configure vanilla bridge
+        run: cmake -S bridge -B bridge/build
+
+      - name: Build vanilla bridge and harness
+        run: cmake --build bridge/build --config Release --parallel 4
+
+      - name: Stage canonical embed, provenance, and real system version.dll
+        shell: pwsh
+        run: |
+          Copy-Item "$env:WINDIR\System32\version.dll" "bridge\build\Release\version-original.dll"
+          Copy-Item "runtime\my-lisp\target\release\my_lisp_embed.dll" "bridge\build\Release\my_lisp_embed.dll"
+          Copy-Item "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt" "bridge\build\Release\cyberpunk-my-lisp-provenance.txt"
+
+      - name: Prove vanilla bridge owns one persistent canonical REPL session
+        shell: pwsh
+        run: >-
+          & .\bridge\build\Release\bridge-load-test.exe
+          .\bridge\build\Release\version.dll
+
+      - name: Parse bridge runtime evidence with canonical my-lisp
+        shell: pwsh
+        run: |
+          $oracle = & .\runtime\my-lisp\target\release\my-lisp.exe --oracle-check .\bridge\build\Release\bridge-observation.lisp
+          $text = $oracle -join "`n"
+          Write-Output $text
+          if ($LASTEXITCODE -ne 0 -or $text -notmatch '\(outcome valid\)') {
+            throw "bridge-observation.lisp is not valid canonical my-lisp data"
+          }
+
       - name: Configure RED4ext adapter
         run: cmake -S adapter -B adapter/build
 

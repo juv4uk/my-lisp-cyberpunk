@@ -1,13 +1,11 @@
 ; version.dll proxy export table (#31 CP-PROBE-INPROCESS-V0).
 ;
-; Each name here is a real function defined in BridgeDllMain.cpp that
-; loads the genuine system version.dll (deployed alongside as
-; "version-original.dll") and forwards the call through the real
-; function pointer with the exact <winver.h> signature -- see that
-; file's header comment for why plain .def forwarder syntax
-; (Name=OtherDll.Name) was tried first and abandoned (MSVC LNK2001).
+; Real version.dll names below are implemented as exact winver.h forwards.
+; MyLispBridgeShutdown is our own lifecycle-only export used for controlled
+; unload; it exposes no Lisp semantics or game policy.
 LIBRARY version
 EXPORTS
+    MyLispBridgeShutdown
     GetFileVersionInfoA
     GetFileVersionInfoExA
     GetFileVersionInfoExW
