@@ -13,6 +13,10 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Prove vanilla boundary guard contract
+        shell: pwsh
+        run: ./tools/tests/VanillaBoundaryGuardTest.ps1
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Test host runtime
