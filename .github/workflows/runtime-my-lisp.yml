@@ -48,3 +48,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "my-lisp.exe --help failed with exit code $LASTEXITCODE"
           }
+
+      - name: Prove exact runtime provenance is recorded
+        shell: pwsh
+        run: |
+          $module = Join-Path $PWD "runtime/my-lisp"
+          $provenance = Join-Path $module "target/release/cyberpunk-my-lisp-provenance.txt"
+          if (-not (Test-Path $provenance)) {
+            throw "Missing runtime provenance: $provenance"
+          }
+          $expectedSha = (& git -C $module rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to resolve pinned my-lisp SHA"
+          }
+          $text = Get-Content $provenance -Raw
+          if ($text -notmatch [regex]::Escape("my-lisp-sha=$expectedSha")) {
+            throw "Provenance does not record exact pinned SHA $expectedSha"
+          }
+          if ($text -notmatch 'embed-abi=[0-9]+') {
+            throw "Provenance does not record embed ABI"
+          }
