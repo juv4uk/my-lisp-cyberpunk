@@ -6,6 +6,9 @@ param(
     [string]$BridgeDll,
 
     [Parameter(Mandatory = $true)]
+    [string]$ProvenanceFile,
+
+    [Parameter(Mandatory = $true)]
     [string]$Corpus,
 
     [Parameter(Mandatory = $true)]
@@ -22,6 +25,7 @@ if (-not (Test-Path $runner)) {
 & $runner `
     -MyLispExe $MyLispExe `
     -BridgeDll $BridgeDll `
+    -ProvenanceFile $ProvenanceFile `
     -Corpus $Corpus `
     -Report $Report
 
