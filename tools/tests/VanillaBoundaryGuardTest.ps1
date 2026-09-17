@@ -129,3 +129,8 @@ try {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
+
+# Expected negative child-process cases leave PowerShell's process-global
+# $LASTEXITCODE at 1. The assertions above already consumed those exit codes;
+# make the harness result explicit so a fully-passing contract test exits 0.
+exit 0
