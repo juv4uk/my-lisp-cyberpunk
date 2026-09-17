@@ -28,6 +28,7 @@ set_target_properties(version PROPERTIES
 target_link_options(version PRIVATE "/DEF:${CMAKE_CURRENT_SOURCE_DIR}/src/version-proxy.def")
 
 # Standalone, non-injected harness: proves LoadLibrary + export
-# forwarding + background thread + file write work before this DLL
+# forwarding and now the canonical in-process REPL contract before this DLL
 # ever goes near the actual game process.
 add_executable(bridge-load-test tests/LoadTest.cpp)
+target_link_libraries(bridge-load-test PRIVATE ws2_32)
