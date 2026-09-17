@@ -159,6 +159,27 @@ jobs:
           $env:CYBERPUNK_EXPECTED_MY_LISP_SHA
           $env:CYBERPUNK_EXPECTED_EMBED_ABI
 
+      - name: Admit the exact staged bridge at the vanilla boundary
+        shell: pwsh
+        run: |
+          $trusted = (Resolve-Path '.\bridge\runtime-stage\version.dll').Path
+          $gameRoot = Join-Path $env:RUNNER_TEMP 'cyberpunk-vanilla-boundary-real-artifact'
+          if (Test-Path -LiteralPath $gameRoot) {
+            Remove-Item -LiteralPath $gameRoot -Recurse -Force
+          }
+          $gameBin = Join-Path $gameRoot 'bin\x64'
+          New-Item -ItemType Directory -Path $gameBin -Force | Out-Null
+          $installed = Join-Path $gameBin 'version.dll'
+          Copy-Item -LiteralPath $trusted -Destination $installed
+
+          & .\tools\Test-VanillaBoundary.ps1 -GameDir $gameRoot -AdmittedBridge $trusted
+
+          $installedHash = (Get-FileHash -LiteralPath $installed -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($installedHash -ne $env:CYBERPUNK_BRIDGE_SHA256) {
+            throw "boundary witness hash $installedHash differs from staged bridge hash $env:CYBERPUNK_BRIDGE_SHA256"
+          }
+          Write-Output "exact staged bridge admitted after load/System32-forwarding witness: sha256=$installedHash"
+
       - name: Parse staged bridge runtime evidence with canonical my-lisp
         shell: pwsh
         run: |
