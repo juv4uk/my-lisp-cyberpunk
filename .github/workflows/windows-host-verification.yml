@@ -87,14 +87,53 @@ jobs:
         shell: pwsh
         run: |
           $cache = @(Get-Content "bridge\build\CMakeCache.txt")
+          $dumpbin = $null
+
+          # Prefer CMake's explicit dumpbin when a generator exposes it.
           $dumpbinLine = @($cache | Where-Object { $_ -match '^CMAKE_DUMPBIN:FILEPATH=' })
-          if ($dumpbinLine.Count -ne 1) {
-            throw "CMake did not expose exactly one dumpbin path"
+          if ($dumpbinLine.Count -eq 1) {
+            $candidate = $dumpbinLine[0].Substring('CMAKE_DUMPBIN:FILEPATH='.Length).Trim()
+            if (Test-Path $candidate) { $dumpbin = $candidate }
           }
-          $dumpbin = $dumpbinLine[0].Substring('CMAKE_DUMPBIN:FILEPATH='.Length).Trim()
-          if (-not (Test-Path $dumpbin)) {
-            throw "CMake dumpbin path does not exist: $dumpbin"
+
+          # Visual Studio generators may omit CMAKE_DUMPBIN from the cache.
+          # Reuse the exact selected MSVC toolset by locating dumpbin beside cl.exe.
+          if ($null -eq $dumpbin) {
+            $compilerLine = @($cache | Where-Object { $_ -match '^CMAKE_CXX_COMPILER:FILEPATH=' })
+            if ($compilerLine.Count -eq 1) {
+              $compiler = $compilerLine[0].Substring('CMAKE_CXX_COMPILER:FILEPATH='.Length).Trim()
+              if (-not [System.IO.Path]::IsPathRooted($compiler)) {
+                $resolvedCompiler = Get-Command $compiler -ErrorAction SilentlyContinue
+                if ($null -ne $resolvedCompiler) { $compiler = $resolvedCompiler.Source }
+              }
+              if (Test-Path $compiler) {
+                $candidate = Join-Path (Split-Path -Parent $compiler) 'dumpbin.exe'
+                if (Test-Path $candidate) { $dumpbin = $candidate }
+              }
+            }
           }
+
+          # Last-resort discovery still uses the installed Visual Studio toolchain,
+          # never a downloaded inspection utility.
+          if ($null -eq $dumpbin) {
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+            if (Test-Path $vswhere) {
+              $install = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
+              if (-not [string]::IsNullOrWhiteSpace($install)) {
+                $versionFile = Join-Path $install 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+                if (Test-Path $versionFile) {
+                  $toolVersion = (Get-Content $versionFile -Raw).Trim()
+                  $candidate = Join-Path $install "VC\Tools\MSVC\$toolVersion\bin\Hostx64\x64\dumpbin.exe"
+                  if (Test-Path $candidate) { $dumpbin = $candidate }
+                }
+              }
+            }
+          }
+
+          if ($null -eq $dumpbin -or -not (Test-Path $dumpbin)) {
+            throw "Unable to resolve dumpbin.exe from the active installed MSVC toolchain"
+          }
+          Write-Output "dependency inspector: $dumpbin"
 
           $output = & $dumpbin /DEPENDENTS "bridge\runtime-stage\version.dll" 2>&1
           $text = $output -join "`n"
