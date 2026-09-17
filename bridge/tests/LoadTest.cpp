@@ -20,6 +20,7 @@ namespace
 constexpr std::uint16_t kReplPort = 40777;
 constexpr long kConnectPollMicros = 100000;
 using ShutdownFn = BOOL(WINAPI*)(DWORD);
+using GetSizeFn = DWORD(WINAPI*)(LPCSTR, LPDWORD);
 
 bool ProveEarlyShutdown(const char* bridgePath)
 {
@@ -48,6 +49,60 @@ bool ProveEarlyShutdown(const char* bridgePath)
     }
     FreeLibrary(h);
     return stopped;
+}
+
+bool ProveSystemVersionForwarding(HMODULE bridge)
+{
+    auto bridgeGetSize = reinterpret_cast<GetSizeFn>(GetProcAddress(bridge, "GetFileVersionInfoSizeA"));
+    if (bridgeGetSize == nullptr)
+    {
+        std::fprintf(stderr, "bridge GetFileVersionInfoSizeA export is missing\n");
+        return false;
+    }
+
+    char systemDirectory[MAX_PATH] = {};
+    const UINT length = GetSystemDirectoryA(systemDirectory, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH)
+    {
+        std::fprintf(stderr, "GetSystemDirectoryA failed: %lu\n", GetLastError());
+        return false;
+    }
+
+    const std::string directory(systemDirectory, length);
+    const std::string realVersionPath = directory + "\\version.dll";
+    const std::string probePath = directory + "\\kernel32.dll";
+
+    HMODULE realVersion = LoadLibraryA(realVersionPath.c_str());
+    if (realVersion == nullptr)
+    {
+        std::fprintf(stderr, "direct system version.dll load failed: %lu\n", GetLastError());
+        return false;
+    }
+
+    auto realGetSize = reinterpret_cast<GetSizeFn>(GetProcAddress(realVersion, "GetFileVersionInfoSizeA"));
+    if (realGetSize == nullptr)
+    {
+        std::fprintf(stderr, "system version.dll GetFileVersionInfoSizeA export is missing\n");
+        FreeLibrary(realVersion);
+        return false;
+    }
+
+    DWORD expectedHandle = 0;
+    DWORD actualHandle = 0;
+    const DWORD expected = realGetSize(probePath.c_str(), &expectedHandle);
+    const DWORD actual = bridgeGetSize(probePath.c_str(), &actualHandle);
+    FreeLibrary(realVersion);
+
+    if (expected == 0 || actual != expected)
+    {
+        std::fprintf(stderr,
+                     "version forwarding mismatch for %s: system=%lu bridge=%lu\n",
+                     probePath.c_str(), expected, actual);
+        return false;
+    }
+
+    std::printf("version forwarding matches System32 version.dll: %lu bytes\n", actual);
+    return true;
 }
 
 bool TryConnect(SOCKET client, const sockaddr_in& address)
@@ -276,20 +331,22 @@ int main(int argc, char** argv)
     }
     std::printf("LoadLibrary OK, module=%p\n", static_cast<void*>(h));
 
-    using GetSizeFn = DWORD(WINAPI*)(LPCSTR, LPDWORD);
-    auto getSize = reinterpret_cast<GetSizeFn>(GetProcAddress(h, "GetFileVersionInfoSizeA"));
     auto shutdown = reinterpret_cast<ShutdownFn>(GetProcAddress(h, "MyLispBridgeShutdown"));
-    if (getSize == nullptr || shutdown == nullptr)
+    if (shutdown == nullptr)
     {
-        std::fprintf(stderr, "required bridge exports are missing\n");
+        std::fprintf(stderr, "required bridge lifecycle export is missing\n");
         FreeLibrary(h);
         WSACleanup();
         return 5;
     }
 
-    DWORD handle = 0;
-    const DWORD size = getSize(argv[1], &handle);
-    std::printf("forwarded GetFileVersionInfoSizeA(%s) = %lu\n", argv[1], size);
+    if (!ProveSystemVersionForwarding(h))
+    {
+        shutdown(5000);
+        FreeLibrary(h);
+        WSACleanup();
+        return 6;
+    }
 
     auto StopAndUnload = [&](SOCKET client) -> bool
     {
@@ -312,7 +369,7 @@ int main(int argc, char** argv)
     {
         std::fprintf(stderr, "canonical REPL did not appear on 127.0.0.1:%u\n", kReplPort);
         StopAndUnload(INVALID_SOCKET);
-        return 6;
+        return 7;
     }
 
     // Replay the exact Ukrainian forms already proved by the pinned
@@ -330,7 +387,7 @@ int main(int argc, char** argv)
     if (!RequireReply(client, defineValue, "42"))
     {
         StopAndUnload(client);
-        return 7;
+        return 8;
     }
 
     // The transport is not Session authority: disconnecting a client must not
@@ -342,7 +399,7 @@ int main(int argc, char** argv)
         !RequireReply(client, defineClosure, "<lambda>"))
     {
         StopAndUnload(client);
-        return 8;
+        return 9;
     }
 
     closesocket(client);
@@ -350,7 +407,7 @@ int main(int argc, char** argv)
     if (client == INVALID_SOCKET || !RequireReply(client, callClosure, "42"))
     {
         StopAndUnload(client);
-        return 9;
+        return 10;
     }
 
     std::string error;
@@ -358,21 +415,21 @@ int main(int argc, char** argv)
     {
         std::fprintf(stderr, "expected canonical error, got '%s'\n", error.c_str());
         StopAndUnload(client);
-        return 10;
+        return 11;
     }
     if (!RequireReply(client, "(+ 20 22)", "42"))
     {
         StopAndUnload(client);
-        return 11;
+        return 12;
     }
 
     if (!StopAndUnload(client))
     {
-        return 12;
+        return 13;
     }
     if (!ProveRuntimeProvenance(std::filesystem::path(argv[1])))
     {
-        return 13;
+        return 14;
     }
     std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + provenance witness OK\n");
     return 0;
