@@ -15,12 +15,21 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function Escape-LispString([string]$Text) {
-    return $Text.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n').Replace("`t", '\t')
+if (-not ('CyberpunkBridgeNative' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class CyberpunkBridgeNative
+{
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    public delegate int ShutdownDelegate(uint timeoutMs);
+}
+'@
 }
 
-function Escape-RequestString([string]$Text) {
-    return Escape-LispString $Text
+function Escape-LispString([string]$Text) {
+    return $Text.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n').Replace("`t", '\t')
 }
 
 function Connect-Loopback([int]$Port, [int]$Attempts = 60) {
@@ -28,7 +37,7 @@ function Connect-Loopback([int]$Port, [int]$Attempts = 60) {
         $client = [System.Net.Sockets.TcpClient]::new()
         try {
             $connect = $client.ConnectAsync('127.0.0.1', $Port)
-            if ($connect.Wait(200)) {
+            if ($connect.Wait(200) -and $client.Connected) {
                 return $client
             }
         }
@@ -63,17 +72,20 @@ function Close-LineChannel($Channel, [System.Net.Sockets.TcpClient]$Client) {
 }
 
 function Invoke-CanonicalEval($Channel, [int]$Id, [string]$Source) {
-    $escaped = Escape-RequestString $Source
-    $Channel.Writer.WriteLine("(request (id $Id) (op eval) (source \"$escaped\"))")
+    $escaped = Escape-LispString $Source
+    $request = '(request (id ' + $Id + ') (op eval) (source "' + $escaped + '"))'
+    $Channel.Writer.WriteLine($request)
     $response = $Channel.Reader.ReadLine()
     if ([string]::IsNullOrWhiteSpace($response)) {
         throw "canonical my-lisp returned no response for case id $Id"
     }
 
     if ($response -match '\(status ok\)') {
-        $match = [regex]::Match($response, '\(value\s+([^()\s]+|\([^\r\n]*\))\)')
+        # v0 corpus deliberately uses scalar successful values, so transport
+        # parsing stays small and does not become a second Lisp reader.
+        $match = [regex]::Match($response, '\(value\s+([^()\s]+)\)')
         if (-not $match.Success) {
-            throw "canonical success response has no parseable value: $response"
+            throw "canonical success response has no scalar value: $response"
         }
         return [pscustomobject]@{
             Status = 'ok'
@@ -165,13 +177,10 @@ try {
     # it starts the bridge-owned persistent canonical Session on 40777.
     $bridgePath = (Resolve-Path $BridgeDll).Path
     $bridgeHandle = [System.Runtime.InteropServices.NativeLibrary]::Load($bridgePath)
-    if ($bridgeHandle -eq [IntPtr]::Zero) {
-        throw "failed to load bridge DLL: $bridgePath"
-    }
     $shutdownPointer = [System.Runtime.InteropServices.NativeLibrary]::GetExport($bridgeHandle, 'MyLispBridgeShutdown')
     $shutdownDelegate = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer(
         $shutdownPointer,
-        [System.Func[uint32,int]]
+        [type][CyberpunkBridgeNative+ShutdownDelegate]
     )
     $bridgeClient = Connect-Loopback 40777
     $bridgeChannel = Open-Utf8LineChannel $bridgeClient
@@ -188,14 +197,15 @@ try {
             $parity = $oracle.Value -ceq $consumer.Value
         }
         elseif ($oracle.Status -eq 'error' -and $consumer.Status -eq 'error') {
-            # v0 compares failure class at the semantic boundary: canonical
-            # side remains authoritative for ErrorKind; the embed surface
-            # returns its canonical rendered `error:` diagnostic.
+            # v0 compares failure at the semantic boundary. The canonical TCP
+            # response owns ErrorKind; embed exposes the same language failure
+            # through its canonical rendered `error:` text.
             $parity = $true
         }
 
         if (-not $parity) {
-            throw "semantic parity failed for case '$($case.id)': oracle=$($oracle.Raw) consumer=$($consumer.Diagnostic)$($consumer.Value)"
+            $consumerObserved = if ($consumer.Status -eq 'error') { $consumer.Diagnostic } else { $consumer.Value }
+            throw "semantic parity failed for case '$($case.id)': oracle=$($oracle.Raw) consumer=$consumerObserved"
         }
 
         $caseId = Escape-LispString ([string]$case.id)
@@ -203,24 +213,29 @@ try {
         $surface = [string]$case.surface
         $escapedSource = Escape-LispString $source
         if ($oracle.Status -eq 'ok') {
-            $oracleRecord = "(oracle (status ok) (value \"$(Escape-LispString $oracle.Value)\"))"
-            $consumerRecord = "(consumer (status ok) (value \"$(Escape-LispString $consumer.Value)\"))"
+            $oracleRecord = '(oracle (status ok) (value "' + (Escape-LispString $oracle.Value) + '"))'
+            $consumerRecord = '(consumer (status ok) (value "' + (Escape-LispString $consumer.Value) + '"))'
         }
         else {
-            $oracleRecord = "(oracle (status error) (kind $($oracle.Kind)))"
-            $consumerRecord = "(consumer (status error) (diagnostic \"$(Escape-LispString $consumer.Diagnostic)\"))"
+            $oracleRecord = '(oracle (status error) (kind ' + $oracle.Kind + '))'
+            $consumerRecord = '(consumer (status error) (diagnostic "' + (Escape-LispString $consumer.Diagnostic) + '"))'
         }
-        $records.Add("((case \"$caseId\") (semantic-id \"$semanticId\") (surface $surface) (source \"$escapedSource\") $oracleRecord $consumerRecord (parity equal))")
+        $record = '((case "' + $caseId + '") ' +
+            '(semantic-id "' + $semanticId + '") ' +
+            '(surface ' + $surface + ') ' +
+            '(source "' + $escapedSource + '") ' +
+            $oracleRecord + ' ' + $consumerRecord + ' (parity equal))'
+        $records.Add($record)
         $requestId++
     }
 
     $body = $records -join "`n    "
     $reportText = @"
 (consumer-conformance-report/1
-  (my-lisp-sha \"$($provenance.Sha)\")
+  (my-lisp-sha "$($provenance.Sha)")
   (embed-abi $($provenance.Abi))
-  (oracle-runner \"my-lisp-cli --protocol=sexpr\")
-  (consumer-runner \"version.dll -> my_lisp_embed\")
+  (oracle-runner "my-lisp-cli --protocol=sexpr")
+  (consumer-runner "version.dll -> my_lisp_embed")
   (cases
     $body))
 "@
@@ -242,6 +257,6 @@ finally {
     Close-LineChannel $canonicalChannel $canonicalClient
     if ($null -ne $canonicalProcess -and -not $canonicalProcess.HasExited) {
         Stop-Process -Id $canonicalProcess.Id -Force -ErrorAction SilentlyContinue
-        $canonicalProcess.WaitForExit(5000) | Out-Null
+        [void]$canonicalProcess.WaitForExit(5000)
     }
 }
