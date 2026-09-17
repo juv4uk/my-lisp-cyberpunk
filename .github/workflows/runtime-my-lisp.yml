@@ -5,6 +5,7 @@ on:
     paths:
       - ".gitmodules"
       - "runtime/my-lisp"
+      - "host-runtime/external/my-lisp"
       - "tools/build-my-lisp-runtime.ps1"
       - "tests/runtime-my-lisp-contract.ps1"
       - ".github/workflows/runtime-my-lisp.yml"
@@ -32,12 +33,16 @@ jobs:
         shell: pwsh
         run: ./tools/build-my-lisp-runtime.ps1
 
-      - name: Prove runtime binary exists and starts
+      - name: Prove CLI and embed artifacts exist
         shell: pwsh
         run: |
           $exe = Join-Path $PWD "runtime/my-lisp/target/release/my-lisp.exe"
+          $embed = Join-Path $PWD "runtime/my-lisp/target/release/my_lisp_embed.dll"
           if (-not (Test-Path $exe)) {
-            throw "Expected runtime binary was not produced: $exe"
+            throw "Expected runtime CLI was not produced: $exe"
+          }
+          if (-not (Test-Path $embed)) {
+            throw "Expected canonical embed DLL was not produced: $embed"
           }
           & $exe --help | Out-Null
           if ($LASTEXITCODE -ne 0) {
