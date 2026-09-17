@@ -83,14 +83,21 @@ try {
 
     # 3. Exact byte-for-byte admitted bridge must pass.
     $exactDir = New-GameDir 'exact-bridge'
-    Copy-Item -LiteralPath $admittedBridge -Destination (Join-Path $exactDir 'bin\x64\version.dll')
+    $exactInstalled = Join-Path $exactDir 'bin\x64\version.dll'
+    Copy-Item -LiteralPath $admittedBridge -Destination $exactInstalled
     $exact = Invoke-Guard $exactDir $admittedBridge
     Require-Pass $exact 'exact admitted bridge'
     if ($exact.Output -notmatch 'admitted bridge SHA-256') {
         throw "exact bridge pass did not record the admitted SHA-256:`n$($exact.Output)"
     }
 
-    # 4. One-byte mutation must fail closed.
+    # 4. Clean uninstall is just removal of our owned one-file payload. No
+    #    version-original.dll needs to be restored; the boundary must return to
+    #    the vanilla baseline immediately after deleting our bridge.
+    Remove-Item -LiteralPath $exactInstalled -Force
+    Require-Pass (Invoke-Guard $exactDir) 'clean uninstall back to vanilla baseline'
+
+    # 5. One-byte mutation must fail closed.
     $mutatedDir = New-GameDir 'mutated-bridge'
     $mutatedPath = Join-Path $mutatedDir 'bin\x64\version.dll'
     Copy-Item -LiteralPath $admittedBridge -Destination $mutatedPath
@@ -99,26 +106,26 @@ try {
     [System.IO.File]::WriteAllBytes($mutatedPath, $bytes)
     Require-Fail (Invoke-Guard $mutatedDir $admittedBridge) 'one-byte-mutated bridge'
 
-    # 5. Exact bridge never suppresses forbidden framework evidence.
+    # 6. Exact bridge never suppresses forbidden framework evidence.
     $frameworkDir = New-GameDir 'bridge-plus-red4ext'
     Copy-Item -LiteralPath $admittedBridge -Destination (Join-Path $frameworkDir 'bin\x64\version.dll')
     New-Item -ItemType Directory -Path (Join-Path $frameworkDir 'red4ext') -Force | Out-Null
     Require-Fail (Invoke-Guard $frameworkDir $admittedBridge) 'exact bridge plus RED4ext'
 
-    # 6. Historical adjacent forwarding target is forbidden by the one-file
+    # 7. Historical adjacent forwarding target is forbidden by the one-file
     #    contract even when version.dll itself is exact.
     $staleLayoutDir = New-GameDir 'stale-version-original'
     Copy-Item -LiteralPath $admittedBridge -Destination (Join-Path $staleLayoutDir 'bin\x64\version.dll')
     Write-Bytes (Join-Path $staleLayoutDir 'bin\x64\version-original.dll') ([byte[]](9, 9, 9))
     Require-Fail (Invoke-Guard $staleLayoutDir $admittedBridge) 'stale version-original.dll layout'
 
-    # 7. A version.dll with no explicit trusted artifact must fail closed. The
+    # 8. A version.dll with no explicit trusted artifact must fail closed. The
     #    filename itself is never an allow-list token.
     $unprovenDir = New-GameDir 'unproven-version'
     Copy-Item -LiteralPath $admittedBridge -Destination (Join-Path $unprovenDir 'bin\x64\version.dll')
     Require-Fail (Invoke-Guard $unprovenDir) 'unproven version.dll without admitted artifact'
 
-    # 8. Keep generic ASI rejection from the old #19 guard.
+    # 9. Keep generic ASI rejection from the old #19 guard.
     $asiDir = New-GameDir 'infected-asi'
     Write-Bytes (Join-Path $asiDir 'bin\x64\plugins\some_other_framework.asi') ([byte[]](0x41, 0x53, 0x49))
     Require-Fail (Invoke-Guard $asiDir) 'unrecognized .asi loader'
