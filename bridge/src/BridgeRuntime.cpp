@@ -27,11 +27,18 @@ void SignalFinished()
 }
 } // namespace
 
-DWORD RunCanonicalRepl(HMODULE ownerModule)
+void PrepareCanonicalRepl()
 {
+    // DllMain calls this before the worker exists.  Once the worker has been
+    // created, only ShutdownCanonicalRepl may move stopRequested to true; the
+    // worker must never erase that request during delayed startup.
     g_stopRequested.store(false, std::memory_order_release);
     g_finished.store(false, std::memory_order_release);
+    g_stoppedEvent.store(nullptr, std::memory_order_release);
+}
 
+DWORD RunCanonicalRepl(HMODULE ownerModule)
+{
     HANDLE stoppedEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (stoppedEvent == nullptr)
     {
@@ -39,6 +46,15 @@ DWORD RunCanonicalRepl(HMODULE ownerModule)
         return 20;
     }
     g_stoppedEvent.store(stoppedEvent, std::memory_order_release);
+
+    // Shutdown may have been requested immediately after LoadLibrary, while
+    // this worker was still delayed outside the loader lock.  Preserve that
+    // request and finish without ever creating a canonical Session.
+    if (g_stopRequested.load(std::memory_order_acquire))
+    {
+        SignalFinished();
+        return 0;
+    }
 
     CanonicalReplHost host;
     if (!host.Start(ownerModule))
