@@ -1,25 +1,28 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [string]$GameDir
+    [string]$GameDir,
+
+    # Trusted build-side copy of our own one-file bridge. This is optional
+    # only for the truly vanilla case where the game directory has no
+    # bin\x64\version.dll at all. A deployed version.dll is never admitted by
+    # filename alone.
+    [string]$AdmittedBridge = ''
 )
 
 <#
 .SYNOPSIS
-    Negative test for docs/vanilla-runtime-boundary.md (#19): fails if any
-    forbidden third-party runtime mod framework is present in the game
-    directory. Passes silently on a clean vanilla install and on our own
-    read-only probe artifacts (tools/memory-probe-v0.ps1,
-    tools/screen-probe-v0.ps1 install nothing into the game directory by
-    construction, so this test never needs to special-case them).
+    Vanilla-runtime boundary guard for #19/#43.
 
-.NOTES
-    This supersedes tools/Test-LocalGameDeployment.ps1's assumption that
-    RED4ext/Codeware/our old adapter plugin SHOULD be present -- that was
-    the pre-vanilla-pivot architecture (see
-    docs/owner-decision-2026-09-16-pause-and-revert-to-vanilla.md). The two
-    scripts intentionally assert opposite things and are not meant to both
-    pass against the same install at the same time.
+.DESCRIPTION
+    Fails if a forbidden third-party runtime framework is present. The final
+    one-file architecture legitimately installs our own bin\x64\version.dll,
+    so that path is handled separately: it is allowed only when its SHA-256
+    exactly matches an explicitly supplied trusted build artifact.
+
+    The retired adjacent version-original.dll forwarding layout is always
+    rejected. PR #49's bridge resolves the genuine Windows version.dll from
+    System32 by absolute path instead.
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -29,22 +32,16 @@ $gameRoot = (Resolve-Path -LiteralPath $GameDir).Path
 $forbidden = @(
     @{ Path = 'red4ext'; Name = 'RED4ext (loader directory)' }
     @{ Path = 'bin\x64\winmm.dll'; Name = 'RED4ext winmm.dll proxy loader' }
-    @{ Path = 'bin\x64\version.dll'; Name = 'CET version.dll proxy loader' }
+    @{ Path = 'bin\x64\version-original.dll'; Name = 'retired adjacent version.dll forwarding target' }
     @{ Path = 'bin\x64\cyber_engine_tweaks.asi'; Name = 'CET (legacy top-level path)' }
     @{ Path = 'bin\x64\plugins\cyber_engine_tweaks.asi'; Name = 'CET' }
     @{ Path = 'bin\x64\plugins\cyber_engine_tweaks'; Name = 'CET plugin directory' }
     @{ Path = 'r6\scripts\NeuralDeck'; Name = 'our old RED4ext-era Redscript' }
 )
 
-# r6\cache\modded\ and final.redscripts.modded are NOT forbidden on
-# their own: the official, first-party REDmod tool (tools\redmod\bin\
-# redMod.exe deploy) writes to this exact path for any legitimately
-# staged mod, including our own redscript-vanilla-probe experiments
-# (see docs/research/vanilla-redmod-log-experiment-result-2026-09-16.md).
-# A prior version of this guard treated that path itself as forbidden,
-# which would have failed against our own official-REDmod-only
-# deployment -- the actual forbidden signal is RED4ext/CET presence
-# (checked above), not this cache directory's mere existence.
+# r6\cache\modded\ and final.redscripts.modded are NOT forbidden on their
+# own: official first-party REDmod writes there. The forbidden signal is a
+# third-party runtime framework, not that cache directory's existence.
 
 $failures = @()
 
@@ -57,9 +54,40 @@ foreach ($entry in $forbidden) {
     }
 }
 
+# `version.dll` is the one intentionally shared filename between forbidden
+# historical loaders and our final bridge. Never whitelist the name. Admit
+# only byte identity with a separate trusted build-side artifact.
+$gameVersion = Join-Path $gameRoot 'bin\x64\version.dll'
+if (Test-Path -LiteralPath $gameVersion) {
+    if (-not (Test-Path -LiteralPath $gameVersion -PathType Leaf)) {
+        $failures += "FAIL: bin\x64\version.dll exists but is not a regular file: $gameVersion"
+    } elseif ([string]::IsNullOrWhiteSpace($AdmittedBridge)) {
+        $failures += "FAIL: unproven version.dll present with no admitted bridge artifact: $gameVersion"
+    } elseif (-not (Test-Path -LiteralPath $AdmittedBridge -PathType Leaf)) {
+        $failures += "FAIL: admitted bridge artifact does not exist as a file: $AdmittedBridge"
+    } else {
+        $resolvedGameVersion = (Resolve-Path -LiteralPath $gameVersion).Path
+        $resolvedAdmitted = (Resolve-Path -LiteralPath $AdmittedBridge).Path
+
+        if ([string]::Equals($resolvedGameVersion, $resolvedAdmitted, [System.StringComparison]::OrdinalIgnoreCase)) {
+            $failures += 'FAIL: admitted bridge must be an independent trusted build artifact, not the deployed version.dll itself'
+        } else {
+            $actualHash = (Get-FileHash -LiteralPath $resolvedGameVersion -Algorithm SHA256).Hash.ToLowerInvariant()
+            $admittedHash = (Get-FileHash -LiteralPath $resolvedAdmitted -Algorithm SHA256).Hash.ToLowerInvariant()
+
+            if ($actualHash -ne $admittedHash) {
+                $failures += "FAIL: foreign or tampered version.dll: actual SHA-256 $actualHash does not match admitted SHA-256 $admittedHash"
+            } else {
+                Write-Host "PASS: admitted bridge SHA-256 $actualHash - exact version.dll identity verified"
+            }
+        }
+    }
+} else {
+    Write-Host 'PASS: absent - mod version.dll (clean vanilla baseline)'
+}
+
 # Any leftover .asi under bin\x64\plugins is a third-party loader by
-# convention on this engine (ASI loaders are how CET and similar
-# frameworks inject); flag anything we didn't already name above.
+# convention on this engine; flag anything we did not already name above.
 $pluginsDir = Join-Path $gameRoot 'bin\x64\plugins'
 if (Test-Path -LiteralPath $pluginsDir) {
     Get-ChildItem -LiteralPath $pluginsDir -Filter '*.asi' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
@@ -69,7 +97,7 @@ if (Test-Path -LiteralPath $pluginsDir) {
 
 if ($failures.Count -gt 0) {
     $failures | ForEach-Object { Write-Host $_ }
-    throw "Vanilla boundary violated: $($failures.Count) forbidden item(s) found in $gameRoot"
+    throw "Vanilla boundary violated: $($failures.Count) forbidden or unproven item(s) found in $gameRoot"
 }
 
-Write-Host "PASS: vanilla runtime boundary holds - 0 forbidden third-party mod frameworks in $gameRoot"
+Write-Host "PASS: vanilla runtime boundary holds in $gameRoot"
