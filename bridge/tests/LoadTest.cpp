@@ -315,37 +315,65 @@ int main(int argc, char** argv)
         return 6;
     }
 
-    std::string ignored;
-    if (!Exchange(client, "(define x 42)", ignored) ||
-        !RequireReply(client, "x", "42") ||
-        !Exchange(client, "(define twice (lambda (value) (+ value value)))", ignored) ||
-        !RequireReply(client, "(twice 21)", "42"))
+    // Replay the exact Ukrainian forms already proved by the pinned
+    // my-lisp-embed tests. u8 + universal character names makes this input
+    // deterministic UTF-8 regardless of the Windows runner's local code page.
+    constexpr const char* defineValue =
+        u8"(\u0432\u0438\u0437\u043d\u0430\u0447\u0438\u0442\u0438 repl-\u043f\u0435\u0440\u0435\u0432\u0456\u0440\u043a\u0430 42)";
+    constexpr const char* readValue =
+        u8"repl-\u043f\u0435\u0440\u0435\u0432\u0456\u0440\u043a\u0430";
+    constexpr const char* defineClosure =
+        u8"(\u0432\u0438\u0437\u043d\u0430\u0447\u0438\u0442\u0438 \u043f\u043e\u0434\u0432\u043e\u0457\u0442\u0438 (\u0444\u0443\u043d\u043a\u0446\u0456\u044f (\u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f) (+ \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f \u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f)))";
+    constexpr const char* callClosure =
+        u8"(\u043f\u043e\u0434\u0432\u043e\u0457\u0442\u0438 21)";
+
+    if (!RequireReply(client, defineValue, "42"))
     {
         StopAndUnload(client);
         return 7;
     }
 
-    std::string error;
-    if (!Exchange(client, "(car 5)", error) || error.rfind("error:", 0) != 0)
+    // The transport is not Session authority: disconnecting a client must not
+    // destroy Lisp state. Reconnect before both variable readback and closure
+    // invocation so one canonical Session is proved across three clients.
+    closesocket(client);
+    client = ConnectRepl();
+    if (client == INVALID_SOCKET || !RequireReply(client, readValue, "42") ||
+        !RequireReply(client, defineClosure, "<lambda>"))
     {
-        std::fprintf(stderr, "expected canonical error, got '%s'\n", error.c_str());
         StopAndUnload(client);
         return 8;
     }
-    if (!RequireReply(client, "(+ 20 22)", "42"))
+
+    closesocket(client);
+    client = ConnectRepl();
+    if (client == INVALID_SOCKET || !RequireReply(client, callClosure, "42"))
     {
         StopAndUnload(client);
         return 9;
     }
 
+    std::string error;
+    if (!Exchange(client, "(car 7)", error) || error.rfind("error:", 0) != 0)
+    {
+        std::fprintf(stderr, "expected canonical error, got '%s'\n", error.c_str());
+        StopAndUnload(client);
+        return 10;
+    }
+    if (!RequireReply(client, "(+ 20 22)", "42"))
+    {
+        StopAndUnload(client);
+        return 11;
+    }
+
     if (!StopAndUnload(client))
     {
-        return 10;
+        return 12;
     }
     if (!ProveRuntimeProvenance(std::filesystem::path(argv[1])))
     {
-        return 11;
+        return 13;
     }
-    std::printf("persistent canonical REPL + shutdown + provenance witness OK\n");
+    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + provenance witness OK\n");
     return 0;
 }
