@@ -240,3 +240,7 @@ try {
 }
 
 Write-Host 'PASS: #31 evidence verifier contract holds in harness mode; no live-game claim was made'
+# Expected negative child pwsh runs above deliberately return 1 and are fully
+# asserted before control reaches this point. Do not let their consumed native
+# exit status leak out as the result of the harness itself.
+exit 0
