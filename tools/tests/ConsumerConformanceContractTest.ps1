@@ -42,8 +42,8 @@ $expectedCases = @(
 )
 
 foreach ($caseId in $expectedCases) {
-    $escaped = [regex]::Escape($caseId)
-    if ($text -notmatch "\(case \"$escaped\"") {
+    $pattern = '\(case "' + [regex]::Escape($caseId) + '"'
+    if ($text -notmatch $pattern) {
         throw "consumer conformance report is missing case: $caseId"
     }
 }
