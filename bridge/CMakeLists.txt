@@ -28,6 +28,7 @@ add_library(
   version
   SHARED
     src/BridgeDllMain.cpp
+    src/BridgeRuntime.cpp
     src/CanonicalReplHost.cpp
     ../adapter/src/LocalReplServer.cpp
 )
