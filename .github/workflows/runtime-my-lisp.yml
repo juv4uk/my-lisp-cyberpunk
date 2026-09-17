@@ -83,3 +83,7 @@ jobs:
           if (-not (Test-Path $staticPath)) {
             throw "Recorded static artifact does not exist: $staticPath"
           }
+          $nativeLine = [regex]::Match($text, '(?m)^native-static-libs=(.+)$')
+          if (-not $nativeLine.Success -or [string]::IsNullOrWhiteSpace($nativeLine.Groups[1].Value)) {
+            throw "Provenance does not record rustc native-static-libs"
+          }
