@@ -7,6 +7,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $moduleRel = "runtime/my-lisp"
 $modulePath = Join-Path $repoRoot $moduleRel
 $exePath = Join-Path $modulePath "target/release/my-lisp.exe"
+$embedPath = Join-Path $modulePath "target/release/my_lisp_embed.dll"
 
 Push-Location $repoRoot
 try {
@@ -28,7 +29,12 @@ try {
     try {
         & cargo build --release -p my-lisp-cli --bin my-lisp
         if ($LASTEXITCODE -ne 0) {
-            throw "cargo build failed for my-lisp runtime"
+            throw "cargo build failed for my-lisp CLI runtime"
+        }
+
+        & cargo build --release -p my-lisp-embed
+        if ($LASTEXITCODE -ne 0) {
+            throw "cargo build failed for canonical my-lisp embed runtime"
         }
     }
     finally {
@@ -36,10 +42,14 @@ try {
     }
 
     if (-not (Test-Path $exePath)) {
-        throw "Expected runtime binary was not produced: $exePath"
+        throw "Expected runtime CLI was not produced: $exePath"
+    }
+    if (-not (Test-Path $embedPath)) {
+        throw "Expected canonical embed DLL was not produced: $embedPath"
     }
 
     Write-Output $exePath
+    Write-Output $embedPath
 }
 finally {
     Pop-Location
