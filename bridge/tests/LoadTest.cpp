@@ -20,6 +20,7 @@ namespace
 constexpr std::uint16_t kReplPort = 40777;
 constexpr long kConnectPollMicros = 100000;
 using ShutdownFn = BOOL(WINAPI*)(DWORD);
+using GetSizeFn = DWORD(WINAPI*)(LPCSTR, LPDWORD);
 
 bool ProveEarlyShutdown(const char* bridgePath)
 {
@@ -48,6 +49,60 @@ bool ProveEarlyShutdown(const char* bridgePath)
     }
     FreeLibrary(h);
     return stopped;
+}
+
+bool ProveSystemVersionForwarding(HMODULE bridge)
+{
+    auto bridgeGetSize = reinterpret_cast<GetSizeFn>(GetProcAddress(bridge, "GetFileVersionInfoSizeA"));
+    if (bridgeGetSize == nullptr)
+    {
+        std::fprintf(stderr, "bridge GetFileVersionInfoSizeA export is missing\n");
+        return false;
+    }
+
+    char systemDirectory[MAX_PATH] = {};
+    const UINT length = GetSystemDirectoryA(systemDirectory, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH)
+    {
+        std::fprintf(stderr, "GetSystemDirectoryA failed: %lu\n", GetLastError());
+        return false;
+    }
+
+    const std::string directory(systemDirectory, length);
+    const std::string realVersionPath = directory + "\\version.dll";
+    const std::string probePath = directory + "\\kernel32.dll";
+
+    HMODULE realVersion = LoadLibraryA(realVersionPath.c_str());
+    if (realVersion == nullptr)
+    {
+        std::fprintf(stderr, "direct system version.dll load failed: %lu\n", GetLastError());
+        return false;
+    }
+
+    auto realGetSize = reinterpret_cast<GetSizeFn>(GetProcAddress(realVersion, "GetFileVersionInfoSizeA"));
+    if (realGetSize == nullptr)
+    {
+        std::fprintf(stderr, "system version.dll GetFileVersionInfoSizeA export is missing\n");
+        FreeLibrary(realVersion);
+        return false;
+    }
+
+    DWORD expectedHandle = 0;
+    DWORD actualHandle = 0;
+    const DWORD expected = realGetSize(probePath.c_str(), &expectedHandle);
+    const DWORD actual = bridgeGetSize(probePath.c_str(), &actualHandle);
+    FreeLibrary(realVersion);
+
+    if (expected == 0 || actual != expected)
+    {
+        std::fprintf(stderr,
+                     "version forwarding mismatch for %s: system=%lu bridge=%lu\n",
+                     probePath.c_str(), expected, actual);
+        return false;
+    }
+
+    std::printf("version forwarding matches System32 version.dll: %lu bytes\n", actual);
+    return true;
 }
 
 bool TryConnect(SOCKET client, const sockaddr_in& address)
@@ -188,41 +243,17 @@ std::string ReadText(const std::filesystem::path& path)
     return text.str();
 }
 
-std::string ProvenanceValue(const std::string& text, const std::string& key)
+bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath,
+                            const std::string& expectedSha,
+                            const std::string& expectedAbi)
 {
-    const std::string prefix = key + "=";
-    std::size_t start = text.find(prefix);
-    if (start == std::string::npos)
+    if (expectedSha.size() != 40 || expectedAbi.empty())
     {
-        return {};
-    }
-    start += prefix.size();
-    std::size_t end = text.find_first_of("\r\n", start);
-    return text.substr(start, end == std::string::npos ? std::string::npos : end - start);
-}
-
-bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath)
-{
-    const std::filesystem::path directory = bridgePath.parent_path();
-    const std::filesystem::path provenancePath = directory / "cyberpunk-my-lisp-provenance.txt";
-    const std::filesystem::path observationPath = directory / "bridge-observation.lisp";
-
-    const std::string provenance = ReadText(provenancePath);
-    if (provenance.empty())
-    {
-        std::fprintf(stderr, "canonical provenance file missing beside bridge: %s\n",
-                     provenancePath.string().c_str());
+        std::fprintf(stderr, "test evidence lacks exact expected SHA/ABI\n");
         return false;
     }
 
-    const std::string sha = ProvenanceValue(provenance, "my-lisp-sha");
-    const std::string abi = ProvenanceValue(provenance, "embed-abi");
-    if (sha.size() != 40 || abi.empty())
-    {
-        std::fprintf(stderr, "canonical provenance file lacks exact SHA/ABI\n");
-        return false;
-    }
-
+    const std::filesystem::path observationPath = bridgePath.parent_path() / "bridge-observation.lisp";
     const std::string observation = ReadText(observationPath);
     if (observation.empty())
     {
@@ -230,16 +261,22 @@ bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath)
         return false;
     }
 
-    const std::string shaFact = "(my-lisp-sha \"" + sha + "\")";
-    const std::string abiFact = "(embed-abi " + abi + ")";
+    const std::string shaFact = "(my-lisp-sha \"" + expectedSha + "\")";
+    const std::string abiFact = "(embed-abi " + expectedAbi + ")";
+    const std::string linkageFact = "(linkage static)";
     if (observation.find(shaFact) == std::string::npos)
     {
-        std::fprintf(stderr, "bridge observation missing exact my-lisp SHA: %s\n", sha.c_str());
+        std::fprintf(stderr, "bridge observation missing exact my-lisp SHA: %s\n", expectedSha.c_str());
         return false;
     }
     if (observation.find(abiFact) == std::string::npos)
     {
-        std::fprintf(stderr, "bridge observation missing accepted embed ABI: %s\n", abi.c_str());
+        std::fprintf(stderr, "bridge observation missing accepted embed ABI: %s\n", expectedAbi.c_str());
+        return false;
+    }
+    if (observation.find(linkageFact) == std::string::npos)
+    {
+        std::fprintf(stderr, "bridge observation missing static linkage provenance\n");
         return false;
     }
     return true;
@@ -248,9 +285,9 @@ bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath)
 
 int main(int argc, char** argv)
 {
-    if (argc < 2)
+    if (argc < 4)
     {
-        std::fprintf(stderr, "usage: LoadTest <path to version.dll>\n");
+        std::fprintf(stderr, "usage: LoadTest <path to version.dll> <expected my-lisp SHA> <expected embed ABI>\n");
         return 1;
     }
 
@@ -276,20 +313,22 @@ int main(int argc, char** argv)
     }
     std::printf("LoadLibrary OK, module=%p\n", static_cast<void*>(h));
 
-    using GetSizeFn = DWORD(WINAPI*)(LPCSTR, LPDWORD);
-    auto getSize = reinterpret_cast<GetSizeFn>(GetProcAddress(h, "GetFileVersionInfoSizeA"));
     auto shutdown = reinterpret_cast<ShutdownFn>(GetProcAddress(h, "MyLispBridgeShutdown"));
-    if (getSize == nullptr || shutdown == nullptr)
+    if (shutdown == nullptr)
     {
-        std::fprintf(stderr, "required bridge exports are missing\n");
+        std::fprintf(stderr, "required bridge lifecycle export is missing\n");
         FreeLibrary(h);
         WSACleanup();
         return 5;
     }
 
-    DWORD handle = 0;
-    const DWORD size = getSize(argv[1], &handle);
-    std::printf("forwarded GetFileVersionInfoSizeA(%s) = %lu\n", argv[1], size);
+    if (!ProveSystemVersionForwarding(h))
+    {
+        shutdown(5000);
+        FreeLibrary(h);
+        WSACleanup();
+        return 6;
+    }
 
     auto StopAndUnload = [&](SOCKET client) -> bool
     {
@@ -312,7 +351,7 @@ int main(int argc, char** argv)
     {
         std::fprintf(stderr, "canonical REPL did not appear on 127.0.0.1:%u\n", kReplPort);
         StopAndUnload(INVALID_SOCKET);
-        return 6;
+        return 7;
     }
 
     // Replay the exact Ukrainian forms already proved by the pinned
@@ -330,7 +369,7 @@ int main(int argc, char** argv)
     if (!RequireReply(client, defineValue, "42"))
     {
         StopAndUnload(client);
-        return 7;
+        return 8;
     }
 
     // The transport is not Session authority: disconnecting a client must not
@@ -342,7 +381,7 @@ int main(int argc, char** argv)
         !RequireReply(client, defineClosure, "<lambda>"))
     {
         StopAndUnload(client);
-        return 8;
+        return 9;
     }
 
     closesocket(client);
@@ -350,7 +389,7 @@ int main(int argc, char** argv)
     if (client == INVALID_SOCKET || !RequireReply(client, callClosure, "42"))
     {
         StopAndUnload(client);
-        return 9;
+        return 10;
     }
 
     std::string error;
@@ -358,22 +397,22 @@ int main(int argc, char** argv)
     {
         std::fprintf(stderr, "expected canonical error, got '%s'\n", error.c_str());
         StopAndUnload(client);
-        return 10;
+        return 11;
     }
     if (!RequireReply(client, "(+ 20 22)", "42"))
     {
         StopAndUnload(client);
-        return 11;
+        return 12;
     }
 
     if (!StopAndUnload(client))
     {
-        return 12;
-    }
-    if (!ProveRuntimeProvenance(std::filesystem::path(argv[1])))
-    {
         return 13;
     }
-    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + provenance witness OK\n");
+    if (!ProveRuntimeProvenance(std::filesystem::path(argv[1]), argv[2], argv[3]))
+    {
+        return 14;
+    }
+    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + compiled provenance witness OK\n");
     return 0;
 }

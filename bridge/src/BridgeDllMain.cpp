@@ -15,8 +15,9 @@
 // lock is released.
 //
 // Export forwarding: each real version.dll export is a thin function that
-// loads the genuine system DLL (deployed alongside as "version-original.dll")
-// once and calls through its exact <winver.h> signature.
+// loads the genuine Windows System32 version.dll by absolute path once and
+// calls through its exact <winver.h> signature.  No adjacent forwarding DLL
+// is a runtime dependency of the portable mod.
 
 #include "BridgeRuntime.hpp"
 
@@ -38,21 +39,15 @@ HMODULE RealVersionDll()
         return g_realVersionDll;
     }
 
-    wchar_t modulePath[MAX_PATH] = {};
-    HMODULE self = nullptr;
-    GetModuleHandleExW(
-        GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-        reinterpret_cast<LPCWSTR>(&RealVersionDll),
-        &self);
-    GetModuleFileNameW(self, modulePath, MAX_PATH);
-
-    std::wstring path(modulePath);
-    const auto slash = path.find_last_of(L"\\/");
-    if (slash != std::wstring::npos)
+    wchar_t systemDirectory[MAX_PATH] = {};
+    const UINT length = GetSystemDirectoryW(systemDirectory, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH)
     {
-        path.resize(slash + 1);
+        return nullptr;
     }
-    path += L"version-original.dll";
+
+    std::wstring path(systemDirectory, length);
+    path += L"\\version.dll";
 
     g_realVersionDll = LoadLibraryW(path.c_str());
     return g_realVersionDll;

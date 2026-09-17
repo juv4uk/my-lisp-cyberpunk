@@ -33,23 +33,27 @@ jobs:
         shell: pwsh
         run: ./tools/build-my-lisp-runtime.ps1
 
-      - name: Prove CLI and embed artifacts exist
+      - name: Prove CLI, dynamic embed, and static embed artifacts exist
         shell: pwsh
         run: |
           $exe = Join-Path $PWD "runtime/my-lisp/target/release/my-lisp.exe"
           $embed = Join-Path $PWD "runtime/my-lisp/target/release/my_lisp_embed.dll"
+          $static = Join-Path $PWD "runtime/my-lisp/target/release/my_lisp_embed.lib"
           if (-not (Test-Path $exe)) {
             throw "Expected runtime CLI was not produced: $exe"
           }
           if (-not (Test-Path $embed)) {
             throw "Expected canonical embed DLL was not produced: $embed"
           }
+          if (-not (Test-Path $static)) {
+            throw "Expected canonical embed static library was not produced: $static"
+          }
           & $exe --help | Out-Null
           if ($LASTEXITCODE -ne 0) {
             throw "my-lisp.exe --help failed with exit code $LASTEXITCODE"
           }
 
-      - name: Prove exact runtime provenance is recorded
+      - name: Prove exact runtime provenance and static linkage are recorded
         shell: pwsh
         run: |
           $module = Join-Path $PWD "runtime/my-lisp"
@@ -61,10 +65,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw "Unable to resolve pinned my-lisp SHA"
           }
-          $text = Get-Content $provenance -Raw
-          if ($text -notmatch [regex]::Escape("my-lisp-sha=$expectedSha")) {
+          $lines = @(Get-Content $provenance)
+          if ($lines -notcontains "my-lisp-sha=$expectedSha") {
             throw "Provenance does not record exact pinned SHA $expectedSha"
           }
-          if ($text -notmatch 'embed-abi=[0-9]+') {
+          if (-not ($lines | Where-Object { $_ -match '^embed-abi=[0-9]+$' })) {
             throw "Provenance does not record embed ABI"
+          }
+          if ($lines -notcontains 'linkage=static') {
+            throw "Provenance does not record static linkage"
+          }
+          $staticLine = @($lines | Where-Object { $_ -like 'static-artifact=*' })
+          if ($staticLine.Count -ne 1) {
+            throw "Provenance does not record exactly one Cargo-produced static artifact"
+          }
+          $staticPath = $staticLine[0].Substring('static-artifact='.Length).Trim()
+          if (-not (Test-Path $staticPath)) {
+            throw "Recorded static artifact does not exist: $staticPath"
+          }
+          $nativeLine = @($lines | Where-Object { $_ -like 'native-static-libs=*' })
+          if ($nativeLine.Count -ne 1 -or [string]::IsNullOrWhiteSpace($nativeLine[0].Substring('native-static-libs='.Length))) {
+            throw "Provenance does not record rustc native-static-libs"
           }

@@ -3,12 +3,11 @@
 #include "CanonicalReplHost.hpp"
 #include "LocalReplQueue.hpp"
 #include "LocalReplServer.hpp"
+#include "MyLispBuildProvenance.hpp"
 
 #include <atomic>
 #include <chrono>
-#include <cctype>
 #include <cstdio>
-#include <cstdlib>
 #include <string>
 #include <thread>
 
@@ -49,87 +48,10 @@ std::wstring AdjacentPath(HMODULE ownerModule, const wchar_t* fileName)
     return path;
 }
 
-bool IsExactSha(const std::string& sha)
-{
-    if (sha.size() != 40)
-    {
-        return false;
-    }
-    for (const unsigned char ch : sha)
-    {
-        if (!std::isxdigit(ch))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool ReadCanonicalProvenance(HMODULE ownerModule, std::string& sha, std::uint32_t& declaredAbi)
-{
-    const std::wstring provenancePath = AdjacentPath(ownerModule, L"cyberpunk-my-lisp-provenance.txt");
-    if (provenancePath.empty())
-    {
-        return false;
-    }
-
-    FILE* file = nullptr;
-    if (_wfopen_s(&file, provenancePath.c_str(), L"rb") != 0 || file == nullptr)
-    {
-        return false;
-    }
-
-    std::string text;
-    char chunk[512];
-    while (const std::size_t read = std::fread(chunk, 1, sizeof(chunk), file))
-    {
-        text.append(chunk, read);
-        if (text.size() > 16 * 1024)
-        {
-            std::fclose(file);
-            return false;
-        }
-    }
-    std::fclose(file);
-
-    auto valueFor = [&text](const char* key) -> std::string
-    {
-        const std::string prefix = std::string(key) + "=";
-        const std::size_t found = text.find(prefix);
-        if (found == std::string::npos)
-        {
-            return {};
-        }
-        const std::size_t start = found + prefix.size();
-        const std::size_t end = text.find_first_of("\r\n", start);
-        return text.substr(start, end == std::string::npos ? std::string::npos : end - start);
-    };
-
-    sha = valueFor("my-lisp-sha");
-    const std::string abiText = valueFor("embed-abi");
-    if (!IsExactSha(sha) || abiText.empty())
-    {
-        return false;
-    }
-
-    char* end = nullptr;
-    const unsigned long parsed = std::strtoul(abiText.c_str(), &end, 10);
-    if (end == abiText.c_str() || *end != '\0' || parsed > 0xFFFFFFFFUL)
-    {
-        return false;
-    }
-    declaredAbi = static_cast<std::uint32_t>(parsed);
-    return true;
-}
-
 bool RecordAcceptedCanonicalProvenance(HMODULE ownerModule, std::uint32_t acceptedAbi)
 {
-    std::string sha;
-    std::uint32_t declaredAbi = 0;
-    if (!ReadCanonicalProvenance(ownerModule, sha, declaredAbi) || declaredAbi != acceptedAbi)
-    {
-        return false;
-    }
+    static_assert(sizeof(CYBERPUNK_MY_LISP_SHA) == 41,
+                  "compiled my-lisp provenance must contain exactly 40 hex characters");
 
     const std::wstring observationPath = AdjacentPath(ownerModule, L"bridge-observation.lisp");
     if (observationPath.empty())
@@ -143,13 +65,17 @@ bool RecordAcceptedCanonicalProvenance(HMODULE ownerModule, std::uint32_t accept
         return false;
     }
 
-    // Provenance only: no Lisp or gameplay semantics are decided here.  The
-    // SHA comes from the build-produced canonical provenance file; the ABI is
-    // the version actually accepted from the loaded my-lisp-embed DLL.
+    // Build/runtime provenance only: semantic meaning remains upstream.  The
+    // SHA was injected from the exact runtime/my-lisp gitlink at configure
+    // time; acceptedAbi is the ABI actually returned by the statically linked
+    // canonical embed after CanonicalReplHost verified it against the upstream
+    // header constant.
     const int written = std::fprintf(
         file,
-        "(bridge-runtime-provenance/1 (my-lisp-sha \"%s\") (embed-abi %u))\n",
-        sha.c_str(), static_cast<unsigned int>(acceptedAbi));
+        "(bridge-runtime-provenance/1 (my-lisp-sha \"%s\") (embed-abi %u) (linkage %s))\n",
+        CYBERPUNK_MY_LISP_SHA,
+        static_cast<unsigned int>(acceptedAbi),
+        CYBERPUNK_MY_LISP_LINKAGE);
     std::fclose(file);
     return written > 0;
 }
@@ -185,7 +111,7 @@ DWORD RunCanonicalRepl(HMODULE ownerModule)
     }
 
     CanonicalReplHost host;
-    if (!host.Start(ownerModule))
+    if (!host.Start())
     {
         SignalFinished();
         return 21;

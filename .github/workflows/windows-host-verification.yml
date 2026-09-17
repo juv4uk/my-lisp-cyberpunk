@@ -28,33 +28,144 @@ jobs:
         # this binary's --oracle-check; it must exist before ctest runs.
         run: ./tools/build-my-lisp-runtime.ps1
 
-      - name: Configure vanilla bridge
-        run: cmake -S bridge -B bridge/build
+      - name: Configure vanilla bridge with pinned static my-lisp
+        shell: pwsh
+        run: |
+          $provenance = "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt"
+          $lines = @(Get-Content $provenance)
+          $staticLine = @($lines | Where-Object { $_ -like 'static-artifact=*' })
+          $nativeLine = @($lines | Where-Object { $_ -like 'native-static-libs=*' })
+          $shaLine = @($lines | Where-Object { $_ -like 'my-lisp-sha=*' })
+          $abiLine = @($lines | Where-Object { $_ -like 'embed-abi=*' })
+          if ($staticLine.Count -ne 1 -or $nativeLine.Count -ne 1 -or
+              $shaLine.Count -ne 1 -or $abiLine.Count -ne 1) {
+            throw "canonical build provenance does not expose exactly one static artifact/native/SHA/ABI input set"
+          }
+          $static = $staticLine[0].Substring('static-artifact='.Length).Trim()
+          $native = $nativeLine[0].Substring('native-static-libs='.Length).Trim()
+          $sha = $shaLine[0].Substring('my-lisp-sha='.Length).Trim()
+          $abi = $abiLine[0].Substring('embed-abi='.Length).Trim()
+          if (-not (Test-Path $static) -or [string]::IsNullOrWhiteSpace($native) -or
+              $sha -notmatch '^[0-9a-f]{40}$' -or $abi -notmatch '^[0-9]+$') {
+            throw "canonical static link/provenance inputs are incomplete"
+          }
+          cmake -S bridge -B bridge/build `
+            "-DMY_LISP_EMBED_STATIC=$static" `
+            "-DMY_LISP_NATIVE_LIBS=$native" `
+            "-DMY_LISP_SHA=$sha"
+          if ($LASTEXITCODE -ne 0) { throw "vanilla bridge configure failed" }
+          "CYBERPUNK_EXPECTED_MY_LISP_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "CYBERPUNK_EXPECTED_EMBED_ABI=$abi" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Build vanilla bridge and harness
         run: cmake --build bridge/build --config Release --parallel 4
 
-      - name: Stage canonical embed, provenance, and real system version.dll
+      - name: Create clean one-DLL runtime stage
         shell: pwsh
         run: |
-          Copy-Item "$env:WINDIR\System32\version.dll" "bridge\build\Release\version-original.dll"
-          Copy-Item "runtime\my-lisp\target\release\my_lisp_embed.dll" "bridge\build\Release\my_lisp_embed.dll"
-          Copy-Item "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt" "bridge\build\Release\cyberpunk-my-lisp-provenance.txt"
+          $stage = "bridge\runtime-stage"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "bridge\build\Release\version.dll" (Join-Path $stage "version.dll")
 
-      - name: Prove vanilla bridge owns one persistent canonical REPL session
+          $files = @(Get-ChildItem -File $stage)
+          if ($files.Count -ne 1 -or $files[0].Name -ne 'version.dll') {
+            throw "runtime install stage must contain exactly one file: version.dll"
+          }
+
+          foreach ($forbidden in @('my_lisp_embed.dll', 'my-lisp.exe', 'version-original.dll', 'cyberpunk-my-lisp-provenance.txt')) {
+            if (Test-Path (Join-Path $stage $forbidden)) {
+              throw "portable runtime stage must not contain $forbidden"
+            }
+          }
+
+          $hash = (Get-FileHash -Algorithm SHA256 (Join-Path $stage 'version.dll')).Hash.ToLowerInvariant()
+          "CYBERPUNK_BRIDGE_SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Output "one-file runtime stage: version.dll sha256=$hash"
+
+      - name: Inspect one-DLL dynamic dependencies
+        shell: pwsh
+        run: |
+          $cache = @(Get-Content "bridge\build\CMakeCache.txt")
+          $dumpbin = $null
+
+          # Prefer CMake's explicit dumpbin when a generator exposes it.
+          $dumpbinLine = @($cache | Where-Object { $_ -match '^CMAKE_DUMPBIN:FILEPATH=' })
+          if ($dumpbinLine.Count -eq 1) {
+            $candidate = $dumpbinLine[0].Substring('CMAKE_DUMPBIN:FILEPATH='.Length).Trim()
+            if (Test-Path $candidate) { $dumpbin = $candidate }
+          }
+
+          # Visual Studio generators may omit CMAKE_DUMPBIN from the cache.
+          # Reuse the exact selected MSVC toolset by locating dumpbin beside cl.exe.
+          if ($null -eq $dumpbin) {
+            $compilerLine = @($cache | Where-Object { $_ -match '^CMAKE_CXX_COMPILER:FILEPATH=' })
+            if ($compilerLine.Count -eq 1) {
+              $compiler = $compilerLine[0].Substring('CMAKE_CXX_COMPILER:FILEPATH='.Length).Trim()
+              if (-not [System.IO.Path]::IsPathRooted($compiler)) {
+                $resolvedCompiler = Get-Command $compiler -ErrorAction SilentlyContinue
+                if ($null -ne $resolvedCompiler) { $compiler = $resolvedCompiler.Source }
+              }
+              if (Test-Path $compiler) {
+                $candidate = Join-Path (Split-Path -Parent $compiler) 'dumpbin.exe'
+                if (Test-Path $candidate) { $dumpbin = $candidate }
+              }
+            }
+          }
+
+          # Last-resort discovery still uses the installed Visual Studio toolchain,
+          # never a downloaded inspection utility.
+          if ($null -eq $dumpbin) {
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+            if (Test-Path $vswhere) {
+              $install = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | Select-Object -First 1).Trim()
+              if (-not [string]::IsNullOrWhiteSpace($install)) {
+                $versionFile = Join-Path $install 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt'
+                if (Test-Path $versionFile) {
+                  $toolVersion = (Get-Content $versionFile -Raw).Trim()
+                  $candidate = Join-Path $install "VC\Tools\MSVC\$toolVersion\bin\Hostx64\x64\dumpbin.exe"
+                  if (Test-Path $candidate) { $dumpbin = $candidate }
+                }
+              }
+            }
+          }
+
+          if ($null -eq $dumpbin -or -not (Test-Path $dumpbin)) {
+            throw "Unable to resolve dumpbin.exe from the active installed MSVC toolchain"
+          }
+          Write-Output "dependency inspector: $dumpbin"
+
+          $output = & $dumpbin /DEPENDENTS "bridge\runtime-stage\version.dll" 2>&1
+          $text = $output -join "`n"
+          Write-Output $text
+          if ($LASTEXITCODE -ne 0) {
+            throw "dumpbin /DEPENDENTS failed"
+          }
+          foreach ($forbidden in @('my_lisp_embed.dll', 'version-original.dll', 'red4ext', 'cyber_engine_tweaks', 'codeware', 'archivexl')) {
+            if ($text -match [regex]::Escape($forbidden)) {
+              throw "portable version.dll imports forbidden runtime dependency: $forbidden"
+            }
+          }
+
+      - name: Prove staged one-DLL owns one persistent canonical REPL session
         shell: pwsh
         run: >-
           & .\bridge\build\Release\bridge-load-test.exe
-          .\bridge\build\Release\version.dll
+          .\bridge\runtime-stage\version.dll
+          $env:CYBERPUNK_EXPECTED_MY_LISP_SHA
+          $env:CYBERPUNK_EXPECTED_EMBED_ABI
 
-      - name: Parse bridge runtime evidence with canonical my-lisp
+      - name: Parse staged bridge runtime evidence with canonical my-lisp
         shell: pwsh
         run: |
-          $oracle = & .\runtime\my-lisp\target\release\my-lisp.exe --oracle-check .\bridge\build\Release\bridge-observation.lisp
+          $oracle = & .\runtime\my-lisp\target\release\my-lisp.exe --oracle-check .\bridge\runtime-stage\bridge-observation.lisp
           $text = $oracle -join "`n"
           Write-Output $text
           if ($LASTEXITCODE -ne 0 -or $text -notmatch '\(outcome valid\)') {
-            throw "bridge-observation.lisp is not valid canonical my-lisp data"
+            throw "staged bridge-observation.lisp is not valid canonical my-lisp data"
+          }
+          if ($text -notmatch '\(outcome valid\)') {
+            throw "canonical reader did not accept staged runtime evidence"
           }
 
       - name: Configure RED4ext adapter
