@@ -34,7 +34,8 @@ if(MY_LISP_NATIVE_LIBS STREQUAL "")
 endif()
 
 set(MY_LISP_SHA "" CACHE STRING "Exact 40-hex runtime/my-lisp gitlink revision")
-if(NOT MY_LISP_SHA MATCHES "^[0-9a-fA-F]{40}$")
+string(LENGTH "${MY_LISP_SHA}" MY_LISP_SHA_LENGTH)
+if(NOT MY_LISP_SHA_LENGTH EQUAL 40 OR NOT MY_LISP_SHA MATCHES "^[0-9a-fA-F]+$")
   message(FATAL_ERROR "MY_LISP_SHA must be the exact pinned runtime/my-lisp commit")
 endif()
 
