@@ -60,32 +60,73 @@ jobs:
       - name: Build vanilla bridge and harness
         run: cmake --build bridge/build --config Release --parallel 4
 
-      - name: Stage one-DLL runtime fixture with no sidecars
+      - name: Create clean one-DLL runtime stage
         shell: pwsh
         run: |
-          foreach ($forbidden in @('my_lisp_embed.dll', 'version-original.dll', 'cyberpunk-my-lisp-provenance.txt')) {
-            $path = Join-Path "bridge\build\Release" $forbidden
-            if (Test-Path $path) {
-              throw "one-DLL runtime fixture must not contain $forbidden"
+          $stage = "bridge\runtime-stage"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item "bridge\build\Release\version.dll" (Join-Path $stage "version.dll")
+
+          $files = @(Get-ChildItem -File $stage)
+          if ($files.Count -ne 1 -or $files[0].Name -ne 'version.dll') {
+            throw "runtime install stage must contain exactly one file: version.dll"
+          }
+
+          foreach ($forbidden in @('my_lisp_embed.dll', 'my-lisp.exe', 'version-original.dll', 'cyberpunk-my-lisp-provenance.txt')) {
+            if (Test-Path (Join-Path $stage $forbidden)) {
+              throw "portable runtime stage must not contain $forbidden"
             }
           }
 
-      - name: Prove vanilla bridge owns one persistent canonical REPL session
+          $hash = (Get-FileHash -Algorithm SHA256 (Join-Path $stage 'version.dll')).Hash.ToLowerInvariant()
+          "CYBERPUNK_BRIDGE_SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Output "one-file runtime stage: version.dll sha256=$hash"
+
+      - name: Inspect one-DLL dynamic dependencies
+        shell: pwsh
+        run: |
+          $cache = @(Get-Content "bridge\build\CMakeCache.txt")
+          $dumpbinLine = @($cache | Where-Object { $_ -match '^CMAKE_DUMPBIN:FILEPATH=' })
+          if ($dumpbinLine.Count -ne 1) {
+            throw "CMake did not expose exactly one dumpbin path"
+          }
+          $dumpbin = $dumpbinLine[0].Substring('CMAKE_DUMPBIN:FILEPATH='.Length).Trim()
+          if (-not (Test-Path $dumpbin)) {
+            throw "CMake dumpbin path does not exist: $dumpbin"
+          }
+
+          $output = & $dumpbin /DEPENDENTS "bridge\runtime-stage\version.dll" 2>&1
+          $text = $output -join "`n"
+          Write-Output $text
+          if ($LASTEXITCODE -ne 0) {
+            throw "dumpbin /DEPENDENTS failed"
+          }
+          foreach ($forbidden in @('my_lisp_embed.dll', 'version-original.dll', 'red4ext', 'cyber_engine_tweaks', 'codeware', 'archivexl')) {
+            if ($text -match [regex]::Escape($forbidden)) {
+              throw "portable version.dll imports forbidden runtime dependency: $forbidden"
+            }
+          }
+
+      - name: Prove staged one-DLL owns one persistent canonical REPL session
         shell: pwsh
         run: >-
           & .\bridge\build\Release\bridge-load-test.exe
-          .\bridge\build\Release\version.dll
+          .\bridge\runtime-stage\version.dll
           $env:CYBERPUNK_EXPECTED_MY_LISP_SHA
           $env:CYBERPUNK_EXPECTED_EMBED_ABI
 
-      - name: Parse bridge runtime evidence with canonical my-lisp
+      - name: Parse staged bridge runtime evidence with canonical my-lisp
         shell: pwsh
         run: |
-          $oracle = & .\runtime\my-lisp\target\release\my-lisp.exe --oracle-check .\bridge\build\Release\bridge-observation.lisp
+          $oracle = & .\runtime\my-lisp\target\release\my-lisp.exe --oracle-check .\bridge\runtime-stage\bridge-observation.lisp
           $text = $oracle -join "`n"
           Write-Output $text
           if ($LASTEXITCODE -ne 0 -or $text -notmatch '\(outcome valid\)') {
-            throw "bridge-observation.lisp is not valid canonical my-lisp data"
+            throw "staged bridge-observation.lisp is not valid canonical my-lisp data"
+          }
+          if ($text -notmatch '\(outcome valid\)') {
+            throw "canonical reader did not accept staged runtime evidence"
           }
 
       - name: Configure RED4ext adapter
