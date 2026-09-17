@@ -79,7 +79,22 @@ try {
 
         # Keep native linker inputs authoritative as well.  Rust owns these
         # requirements; Cyberpunk must not maintain a copied Windows library list.
-        $nativeOutput = @(& cargo rustc --release -p my-lisp-embed --lib -- --print native-static-libs 2>&1 | ForEach-Object { "$_" })
+        # GitHub's Rust setup enables colored Cargo output globally; rustc's
+        # machine-consumed native-static-libs line must be plain text, exactly as
+        # the upstream my-lisp#316 witness requests it.
+        $previousCargoColor = $env:CARGO_TERM_COLOR
+        try {
+            $env:CARGO_TERM_COLOR = 'never'
+            $nativeOutput = @(& cargo rustc --release -p my-lisp-embed --lib -- --print native-static-libs 2>&1 | ForEach-Object { "$_" })
+        }
+        finally {
+            if ($null -eq $previousCargoColor) {
+                Remove-Item Env:CARGO_TERM_COLOR -ErrorAction SilentlyContinue
+            }
+            else {
+                $env:CARGO_TERM_COLOR = $previousCargoColor
+            }
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "rustc failed while reporting native-static-libs for my-lisp-embed"
         }
