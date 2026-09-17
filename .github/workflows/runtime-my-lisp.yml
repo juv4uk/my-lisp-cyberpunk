@@ -33,23 +33,27 @@ jobs:
         shell: pwsh
         run: ./tools/build-my-lisp-runtime.ps1
 
-      - name: Prove CLI and embed artifacts exist
+      - name: Prove CLI, dynamic embed, and static embed artifacts exist
         shell: pwsh
         run: |
           $exe = Join-Path $PWD "runtime/my-lisp/target/release/my-lisp.exe"
           $embed = Join-Path $PWD "runtime/my-lisp/target/release/my_lisp_embed.dll"
+          $static = Join-Path $PWD "runtime/my-lisp/target/release/my_lisp_embed.lib"
           if (-not (Test-Path $exe)) {
             throw "Expected runtime CLI was not produced: $exe"
           }
           if (-not (Test-Path $embed)) {
             throw "Expected canonical embed DLL was not produced: $embed"
           }
+          if (-not (Test-Path $static)) {
+            throw "Expected canonical embed static library was not produced: $static"
+          }
           & $exe --help | Out-Null
           if ($LASTEXITCODE -ne 0) {
             throw "my-lisp.exe --help failed with exit code $LASTEXITCODE"
           }
 
-      - name: Prove exact runtime provenance is recorded
+      - name: Prove exact runtime provenance and static linkage are recorded
         shell: pwsh
         run: |
           $module = Join-Path $PWD "runtime/my-lisp"
@@ -67,4 +71,15 @@ jobs:
           }
           if ($text -notmatch 'embed-abi=[0-9]+') {
             throw "Provenance does not record embed ABI"
+          }
+          if ($text -notmatch '(?m)^linkage=static$') {
+            throw "Provenance does not record static linkage"
+          }
+          $staticLine = [regex]::Match($text, '(?m)^static-artifact=(.+)$')
+          if (-not $staticLine.Success) {
+            throw "Provenance does not record the Cargo-produced static artifact"
+          }
+          $staticPath = $staticLine.Groups[1].Value.Trim()
+          if (-not (Test-Path $staticPath)) {
+            throw "Recorded static artifact does not exist: $staticPath"
           }
