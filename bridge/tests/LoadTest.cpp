@@ -16,6 +16,36 @@ namespace
 {
 constexpr std::uint16_t kReplPort = 40777;
 constexpr long kConnectPollMicros = 100000;
+using ShutdownFn = BOOL(WINAPI*)(DWORD);
+
+bool ProveEarlyShutdown(const char* bridgePath)
+{
+    HMODULE h = LoadLibraryA(bridgePath);
+    if (h == nullptr)
+    {
+        std::fprintf(stderr, "early-shutdown LoadLibrary failed: %lu\n", GetLastError());
+        return false;
+    }
+
+    auto shutdown = reinterpret_cast<ShutdownFn>(GetProcAddress(h, "MyLispBridgeShutdown"));
+    if (shutdown == nullptr)
+    {
+        std::fprintf(stderr, "early-shutdown export is missing\n");
+        FreeLibrary(h);
+        return false;
+    }
+
+    // This call intentionally races the bridge worker's startup delay.  A
+    // deterministic lifecycle must preserve this stop request rather than
+    // resetting it when the worker eventually creates its Session.
+    const bool stopped = shutdown(5000) == TRUE;
+    if (!stopped)
+    {
+        std::fprintf(stderr, "early MyLispBridgeShutdown timed out\n");
+    }
+    FreeLibrary(h);
+    return stopped;
+}
 
 bool TryConnect(SOCKET client, const sockaddr_in& address)
 {
@@ -152,11 +182,17 @@ int main(int argc, char** argv)
         return 1;
     }
 
+    if (!ProveEarlyShutdown(argv[1]))
+    {
+        return 2;
+    }
+    std::printf("early shutdown witness OK\n");
+
     WSADATA winsock{};
     if (WSAStartup(MAKEWORD(2, 2), &winsock) != 0)
     {
         std::fprintf(stderr, "WSAStartup failed\n");
-        return 2;
+        return 3;
     }
 
     HMODULE h = LoadLibraryA(argv[1]);
@@ -164,12 +200,11 @@ int main(int argc, char** argv)
     {
         std::fprintf(stderr, "LoadLibrary failed: %lu\n", GetLastError());
         WSACleanup();
-        return 3;
+        return 4;
     }
     std::printf("LoadLibrary OK, module=%p\n", static_cast<void*>(h));
 
     using GetSizeFn = DWORD(WINAPI*)(LPCSTR, LPDWORD);
-    using ShutdownFn = BOOL(WINAPI*)(DWORD);
     auto getSize = reinterpret_cast<GetSizeFn>(GetProcAddress(h, "GetFileVersionInfoSizeA"));
     auto shutdown = reinterpret_cast<ShutdownFn>(GetProcAddress(h, "MyLispBridgeShutdown"));
     if (getSize == nullptr || shutdown == nullptr)
@@ -177,7 +212,7 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "required bridge exports are missing\n");
         FreeLibrary(h);
         WSACleanup();
-        return 4;
+        return 5;
     }
 
     DWORD handle = 0;
@@ -205,7 +240,7 @@ int main(int argc, char** argv)
     {
         std::fprintf(stderr, "canonical REPL did not appear on 127.0.0.1:%u\n", kReplPort);
         StopAndUnload(INVALID_SOCKET);
-        return 5;
+        return 6;
     }
 
     std::string ignored;
@@ -215,7 +250,7 @@ int main(int argc, char** argv)
         !RequireReply(client, "(twice 21)", "42"))
     {
         StopAndUnload(client);
-        return 6;
+        return 7;
     }
 
     std::string error;
@@ -223,17 +258,17 @@ int main(int argc, char** argv)
     {
         std::fprintf(stderr, "expected canonical error, got '%s'\n", error.c_str());
         StopAndUnload(client);
-        return 7;
+        return 8;
     }
     if (!RequireReply(client, "(+ 20 22)", "42"))
     {
         StopAndUnload(client);
-        return 8;
+        return 9;
     }
 
     if (!StopAndUnload(client))
     {
-        return 9;
+        return 10;
     }
     std::printf("persistent canonical REPL + shutdown witness OK\n");
     return 0;
