@@ -1,0 +1,29 @@
+{
+  "protocol": "consumer-conformance-corpus/1",
+  "cases": [
+    {
+      "id": "add-symbolic",
+      "semantic_id": "0104",
+      "surface": "sym",
+      "source": "(+ 20 22)"
+    },
+    {
+      "id": "car-english",
+      "semantic_id": "0005",
+      "surface": "en",
+      "source": "(car (cons 2 3))"
+    },
+    {
+      "id": "car-ukrainian",
+      "semantic_id": "0005",
+      "surface": "uk",
+      "source": "(перше (сполучити 2 3))"
+    },
+    {
+      "id": "car-non-pair-error",
+      "semantic_id": "0005",
+      "surface": "en",
+      "source": "(car 5)"
+    }
+  ]
+}

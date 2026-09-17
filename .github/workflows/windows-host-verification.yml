@@ -193,6 +193,16 @@ jobs:
             throw "canonical reader did not accept staged runtime evidence"
           }
 
+      - name: Prove canonical CLI and bridge Session conformance
+        shell: pwsh
+        run: >-
+          & .\tools\tests\ConsumerConformanceContractTest.ps1
+          -MyLispExe .\runtime\my-lisp\target\release\my-lisp.exe
+          -BridgeDll .\bridge\runtime-stage\version.dll
+          -ProvenanceFile .\runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt
+          -Corpus .\bridge\tests\fixtures\consumer-conformance-v0.json
+          -Report .\bridge\build\Release\consumer-conformance-report.lisp
+
       - name: Configure RED4ext adapter
         run: cmake -S adapter -B adapter/build
 
