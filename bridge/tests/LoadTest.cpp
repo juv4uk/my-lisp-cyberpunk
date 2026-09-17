@@ -243,41 +243,17 @@ std::string ReadText(const std::filesystem::path& path)
     return text.str();
 }
 
-std::string ProvenanceValue(const std::string& text, const std::string& key)
+bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath,
+                            const std::string& expectedSha,
+                            const std::string& expectedAbi)
 {
-    const std::string prefix = key + "=";
-    std::size_t start = text.find(prefix);
-    if (start == std::string::npos)
+    if (expectedSha.size() != 40 || expectedAbi.empty())
     {
-        return {};
-    }
-    start += prefix.size();
-    std::size_t end = text.find_first_of("\r\n", start);
-    return text.substr(start, end == std::string::npos ? std::string::npos : end - start);
-}
-
-bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath)
-{
-    const std::filesystem::path directory = bridgePath.parent_path();
-    const std::filesystem::path provenancePath = directory / "cyberpunk-my-lisp-provenance.txt";
-    const std::filesystem::path observationPath = directory / "bridge-observation.lisp";
-
-    const std::string provenance = ReadText(provenancePath);
-    if (provenance.empty())
-    {
-        std::fprintf(stderr, "canonical provenance file missing beside bridge: %s\n",
-                     provenancePath.string().c_str());
+        std::fprintf(stderr, "test evidence lacks exact expected SHA/ABI\n");
         return false;
     }
 
-    const std::string sha = ProvenanceValue(provenance, "my-lisp-sha");
-    const std::string abi = ProvenanceValue(provenance, "embed-abi");
-    if (sha.size() != 40 || abi.empty())
-    {
-        std::fprintf(stderr, "canonical provenance file lacks exact SHA/ABI\n");
-        return false;
-    }
-
+    const std::filesystem::path observationPath = bridgePath.parent_path() / "bridge-observation.lisp";
     const std::string observation = ReadText(observationPath);
     if (observation.empty())
     {
@@ -285,16 +261,22 @@ bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath)
         return false;
     }
 
-    const std::string shaFact = "(my-lisp-sha \"" + sha + "\")";
-    const std::string abiFact = "(embed-abi " + abi + ")";
+    const std::string shaFact = "(my-lisp-sha \"" + expectedSha + "\")";
+    const std::string abiFact = "(embed-abi " + expectedAbi + ")";
+    const std::string linkageFact = "(linkage static)";
     if (observation.find(shaFact) == std::string::npos)
     {
-        std::fprintf(stderr, "bridge observation missing exact my-lisp SHA: %s\n", sha.c_str());
+        std::fprintf(stderr, "bridge observation missing exact my-lisp SHA: %s\n", expectedSha.c_str());
         return false;
     }
     if (observation.find(abiFact) == std::string::npos)
     {
-        std::fprintf(stderr, "bridge observation missing accepted embed ABI: %s\n", abi.c_str());
+        std::fprintf(stderr, "bridge observation missing accepted embed ABI: %s\n", expectedAbi.c_str());
+        return false;
+    }
+    if (observation.find(linkageFact) == std::string::npos)
+    {
+        std::fprintf(stderr, "bridge observation missing static linkage provenance\n");
         return false;
     }
     return true;
@@ -303,9 +285,9 @@ bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath)
 
 int main(int argc, char** argv)
 {
-    if (argc < 2)
+    if (argc < 4)
     {
-        std::fprintf(stderr, "usage: LoadTest <path to version.dll>\n");
+        std::fprintf(stderr, "usage: LoadTest <path to version.dll> <expected my-lisp SHA> <expected embed ABI>\n");
         return 1;
     }
 
@@ -427,10 +409,10 @@ int main(int argc, char** argv)
     {
         return 13;
     }
-    if (!ProveRuntimeProvenance(std::filesystem::path(argv[1])))
+    if (!ProveRuntimeProvenance(std::filesystem::path(argv[1]), argv[2], argv[3]))
     {
         return 14;
     }
-    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + provenance witness OK\n");
+    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + compiled provenance witness OK\n");
     return 0;
 }
