@@ -1,3 +1,5 @@
+# Consumer conformance owns only comparison/evidence shape. Semantic expected
+# values are computed by the pinned canonical my-lisp oracle, never copied here.
 param(
     [Parameter(Mandatory = $true)]
     [string]$MyLispExe,
