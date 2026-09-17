@@ -28,8 +28,25 @@ jobs:
         # this binary's --oracle-check; it must exist before ctest runs.
         run: ./tools/build-my-lisp-runtime.ps1
 
-      - name: Configure vanilla bridge
-        run: cmake -S bridge -B bridge/build
+      - name: Configure vanilla bridge with pinned static my-lisp
+        shell: pwsh
+        run: |
+          $provenance = "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt"
+          $lines = @(Get-Content $provenance)
+          $staticLine = @($lines | Where-Object { $_ -like 'static-artifact=*' })
+          $nativeLine = @($lines | Where-Object { $_ -like 'native-static-libs=*' })
+          if ($staticLine.Count -ne 1 -or $nativeLine.Count -ne 1) {
+            throw "canonical build provenance does not expose exactly one static artifact/native input set"
+          }
+          $static = $staticLine[0].Substring('static-artifact='.Length).Trim()
+          $native = $nativeLine[0].Substring('native-static-libs='.Length).Trim()
+          if (-not (Test-Path $static) -or [string]::IsNullOrWhiteSpace($native)) {
+            throw "canonical static link inputs are incomplete"
+          }
+          cmake -S bridge -B bridge/build `
+            "-DMY_LISP_EMBED_STATIC=$static" `
+            "-DMY_LISP_NATIVE_LIBS=$native"
+          if ($LASTEXITCODE -ne 0) { throw "vanilla bridge configure failed" }
 
       - name: Build vanilla bridge and harness
         run: cmake --build bridge/build --config Release --parallel 4
@@ -40,7 +57,7 @@ jobs:
           Copy-Item "$env:WINDIR\System32\version.dll" "bridge\build\Release\version-original.dll"
           Copy-Item "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt" "bridge\build\Release\cyberpunk-my-lisp-provenance.txt"
           if (Test-Path "bridge\build\Release\my_lisp_embed.dll") {
-            throw "one-DLL RED fixture must not stage my_lisp_embed.dll"
+            throw "one-DLL GREEN fixture must not stage my_lisp_embed.dll"
           }
 
       - name: Prove vanilla bridge owns one persistent canonical REPL session
