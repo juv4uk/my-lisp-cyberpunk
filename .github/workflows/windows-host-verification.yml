@@ -51,14 +51,13 @@ jobs:
       - name: Build vanilla bridge and harness
         run: cmake --build bridge/build --config Release --parallel 4
 
-      - name: Stage provenance only; no embed or forwarding sidecars
+      - name: Stage one-DLL runtime fixture with no sidecars
         shell: pwsh
         run: |
-          Copy-Item "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt" "bridge\build\Release\cyberpunk-my-lisp-provenance.txt"
-          foreach ($forbidden in @('my_lisp_embed.dll', 'version-original.dll')) {
+          foreach ($forbidden in @('my_lisp_embed.dll', 'version-original.dll', 'cyberpunk-my-lisp-provenance.txt')) {
             $path = Join-Path "bridge\build\Release" $forbidden
             if (Test-Path $path) {
-              throw "one-DLL RED fixture must not stage $forbidden"
+              throw "one-DLL runtime fixture must not contain $forbidden"
             }
           }
 
