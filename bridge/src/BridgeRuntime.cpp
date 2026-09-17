@@ -145,7 +145,7 @@ bool RecordAcceptedCanonicalProvenance(HMODULE ownerModule, std::uint32_t accept
 
     // Provenance only: no Lisp or gameplay semantics are decided here.  The
     // SHA comes from the build-produced canonical provenance file; the ABI is
-    // the version actually accepted from the loaded my-lisp-embed DLL.
+    // the version actually accepted from the statically linked my-lisp embed.
     const int written = std::fprintf(
         file,
         "(bridge-runtime-provenance/1 (my-lisp-sha \"%s\") (embed-abi %u))\n",
@@ -185,7 +185,7 @@ DWORD RunCanonicalRepl(HMODULE ownerModule)
     }
 
     CanonicalReplHost host;
-    if (!host.Start(ownerModule))
+    if (!host.Start())
     {
         SignalFinished();
         return 21;
