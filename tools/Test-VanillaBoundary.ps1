@@ -27,6 +27,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Get-Sha256Hex([string]$Path) {
+    # Do not depend on Get-FileHash here. This guard is also executed from the
+    # historical CTest/Windows-PowerShell path, where module discovery can be
+    # narrower than in pwsh. SHA-256 itself is the contract, so use the .NET
+    # primitive directly and keep the guard portable across both hosts.
+    $stream = [System.IO.File]::OpenRead($Path)
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = $hasher.ComputeHash($stream)
+    } finally {
+        $stream.Dispose()
+        $hasher.Dispose()
+    }
+
+    return ([System.BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant())
+}
+
 $gameRoot = (Resolve-Path -LiteralPath $GameDir).Path
 
 $forbidden = @(
@@ -72,8 +89,8 @@ if (Test-Path -LiteralPath $gameVersion) {
         if ([string]::Equals($resolvedGameVersion, $resolvedAdmitted, [System.StringComparison]::OrdinalIgnoreCase)) {
             $failures += 'FAIL: admitted bridge must be an independent trusted build artifact, not the deployed version.dll itself'
         } else {
-            $actualHash = (Get-FileHash -LiteralPath $resolvedGameVersion -Algorithm SHA256).Hash.ToLowerInvariant()
-            $admittedHash = (Get-FileHash -LiteralPath $resolvedAdmitted -Algorithm SHA256).Hash.ToLowerInvariant()
+            $actualHash = Get-Sha256Hex $resolvedGameVersion
+            $admittedHash = Get-Sha256Hex $resolvedAdmitted
 
             if ($actualHash -ne $admittedHash) {
                 $failures += "FAIL: foreign or tampered version.dll: actual SHA-256 $actualHash does not match admitted SHA-256 $admittedHash"
