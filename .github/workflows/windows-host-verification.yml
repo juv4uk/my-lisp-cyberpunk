@@ -34,11 +34,12 @@ jobs:
       - name: Build vanilla bridge and harness
         run: cmake --build bridge/build --config Release --parallel 4
 
-      - name: Stage canonical embed and real system version.dll
+      - name: Stage canonical embed, provenance, and real system version.dll
         shell: pwsh
         run: |
           Copy-Item "$env:WINDIR\System32\version.dll" "bridge\build\Release\version-original.dll"
           Copy-Item "runtime\my-lisp\target\release\my_lisp_embed.dll" "bridge\build\Release\my_lisp_embed.dll"
+          Copy-Item "runtime\my-lisp\target\release\cyberpunk-my-lisp-provenance.txt" "bridge\build\Release\cyberpunk-my-lisp-provenance.txt"
 
       - name: Prove vanilla bridge owns one persistent canonical REPL session
         shell: pwsh
