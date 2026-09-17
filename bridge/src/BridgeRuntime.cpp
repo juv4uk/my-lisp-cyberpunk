@@ -6,6 +6,9 @@
 
 #include <atomic>
 #include <chrono>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <thread>
 
@@ -24,6 +27,131 @@ void SignalFinished()
     {
         SetEvent(event);
     }
+}
+
+std::wstring AdjacentPath(HMODULE ownerModule, const wchar_t* fileName)
+{
+    wchar_t modulePath[MAX_PATH] = {};
+    const DWORD length = GetModuleFileNameW(ownerModule, modulePath, MAX_PATH);
+    if (length == 0 || length == MAX_PATH)
+    {
+        return {};
+    }
+
+    std::wstring path(modulePath, length);
+    const auto slash = path.find_last_of(L"\\/");
+    if (slash == std::wstring::npos)
+    {
+        return {};
+    }
+    path.resize(slash + 1);
+    path += fileName;
+    return path;
+}
+
+bool IsExactSha(const std::string& sha)
+{
+    if (sha.size() != 40)
+    {
+        return false;
+    }
+    for (const unsigned char ch : sha)
+    {
+        if (!std::isxdigit(ch))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ReadCanonicalProvenance(HMODULE ownerModule, std::string& sha, std::uint32_t& declaredAbi)
+{
+    const std::wstring provenancePath = AdjacentPath(ownerModule, L"cyberpunk-my-lisp-provenance.txt");
+    if (provenancePath.empty())
+    {
+        return false;
+    }
+
+    FILE* file = nullptr;
+    if (_wfopen_s(&file, provenancePath.c_str(), L"rb") != 0 || file == nullptr)
+    {
+        return false;
+    }
+
+    std::string text;
+    char chunk[512];
+    while (const std::size_t read = std::fread(chunk, 1, sizeof(chunk), file))
+    {
+        text.append(chunk, read);
+        if (text.size() > 16 * 1024)
+        {
+            std::fclose(file);
+            return false;
+        }
+    }
+    std::fclose(file);
+
+    auto valueFor = [&text](const char* key) -> std::string
+    {
+        const std::string prefix = std::string(key) + "=";
+        const std::size_t found = text.find(prefix);
+        if (found == std::string::npos)
+        {
+            return {};
+        }
+        const std::size_t start = found + prefix.size();
+        const std::size_t end = text.find_first_of("\r\n", start);
+        return text.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    };
+
+    sha = valueFor("my-lisp-sha");
+    const std::string abiText = valueFor("embed-abi");
+    if (!IsExactSha(sha) || abiText.empty())
+    {
+        return false;
+    }
+
+    char* end = nullptr;
+    const unsigned long parsed = std::strtoul(abiText.c_str(), &end, 10);
+    if (end == abiText.c_str() || *end != '\0' || parsed > 0xFFFFFFFFUL)
+    {
+        return false;
+    }
+    declaredAbi = static_cast<std::uint32_t>(parsed);
+    return true;
+}
+
+bool RecordAcceptedCanonicalProvenance(HMODULE ownerModule, std::uint32_t acceptedAbi)
+{
+    std::string sha;
+    std::uint32_t declaredAbi = 0;
+    if (!ReadCanonicalProvenance(ownerModule, sha, declaredAbi) || declaredAbi != acceptedAbi)
+    {
+        return false;
+    }
+
+    const std::wstring observationPath = AdjacentPath(ownerModule, L"bridge-observation.lisp");
+    if (observationPath.empty())
+    {
+        return false;
+    }
+
+    FILE* file = nullptr;
+    if (_wfopen_s(&file, observationPath.c_str(), L"a") != 0 || file == nullptr)
+    {
+        return false;
+    }
+
+    // Provenance only: no Lisp or gameplay semantics are decided here.  The
+    // SHA comes from the build-produced canonical provenance file; the ABI is
+    // the version actually accepted from the loaded my-lisp-embed DLL.
+    const int written = std::fprintf(
+        file,
+        "(bridge-runtime-provenance/1 (my-lisp-sha \"%s\") (embed-abi %u))\n",
+        sha.c_str(), static_cast<unsigned int>(acceptedAbi));
+    std::fclose(file);
+    return written > 0;
 }
 } // namespace
 
@@ -61,6 +189,13 @@ DWORD RunCanonicalRepl(HMODULE ownerModule)
     {
         SignalFinished();
         return 21;
+    }
+
+    if (!RecordAcceptedCanonicalProvenance(ownerModule, host.AbiVersion()))
+    {
+        host.Stop();
+        SignalFinished();
+        return 23;
     }
 
     local_repl::RequestQueue queue;
