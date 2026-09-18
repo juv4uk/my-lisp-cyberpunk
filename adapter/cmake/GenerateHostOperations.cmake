@@ -52,6 +52,22 @@ foreach(entry IN LISTS entries)
   if(NOT result MATCHES "^(nil|truth|fixnum|symbol|string|rational|game-handle)$")
     message(FATAL_ERROR "host operation registry has invalid result kind: ${entry}")
   endif()
+  # The current registry schema carries exactly one scalar input-kind field.
+  # Therefore arity is part of the type contract, not descriptive prose:
+  # nullary operations must have no input, unary operations must name one
+  # admitted input kind, and higher arities need a future explicit vector
+  # schema rather than silently pretending one kind describes every argument.
+  if(arity STREQUAL "0")
+    if(NOT input STREQUAL "none")
+      message(FATAL_ERROR "host operation registry arity/input mismatch: nullary operation declares input '${input}': ${entry}")
+    endif()
+  elseif(arity STREQUAL "1")
+    if(input STREQUAL "none")
+      message(FATAL_ERROR "host operation registry arity/input mismatch: unary operation declares no input: ${entry}")
+    endif()
+  else()
+    message(FATAL_ERROR "host operation registry has unsupported arity for scalar input metadata: ${entry}")
+  endif()
   list(FIND ids "${id}" repeated_id)
   list(FIND surfaces "${surface}" repeated_surface)
   if(NOT repeated_id EQUAL -1 OR NOT repeated_surface EQUAL -1)
