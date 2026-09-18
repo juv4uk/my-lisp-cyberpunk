@@ -9,6 +9,18 @@ if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) {
 
 $text = Get-Content -Raw -LiteralPath $runner
 
+$tokens = $null
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    $runner,
+    [ref]$tokens,
+    [ref]$parseErrors
+)
+if ($parseErrors.Count -ne 0) {
+    $details = ($parseErrors | ForEach-Object { $_.Message }) -join '; '
+    throw "final live witness runner has PowerShell parse errors: $details"
+}
+
 $required = @(
     @{ Pattern = '\[string\]\$GameDir'; Label = 'explicit GameDir input' },
     @{ Pattern = '\[string\]\$BridgeArtifact'; Label = 'separate trusted bridge artifact input' },
