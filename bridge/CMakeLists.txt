@@ -57,6 +57,7 @@ add_library(
     src/BridgeDllMain.cpp
     src/BridgeRuntime.cpp
     src/CanonicalReplHost.cpp
+    src/LispPluginLoader.cpp
     ../adapter/src/LocalReplServer.cpp
 )
 set_target_properties(version PROPERTIES
@@ -70,7 +71,7 @@ target_include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/../runtime/my-lisp/crates/my-lisp-embed/include"
     "${MY_LISP_GENERATED_DIR}"
 )
-target_link_libraries(version PRIVATE "${MY_LISP_EMBED_STATIC}" ws2_32)
+target_link_libraries(version PRIVATE "${MY_LISP_EMBED_STATIC}" ws2_32 bcrypt)
 
 # Preserve rustc's distinction between ordinary native libraries and raw MSVC
 # linker options (for example /defaultlib:msvcrt), exactly as the upstream
