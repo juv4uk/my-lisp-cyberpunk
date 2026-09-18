@@ -77,8 +77,57 @@ try {
   $et=Get-Content -Raw -LiteralPath $EvidenceOut; if($et -notmatch '\(target-mode live-cyberpunk\)'){throw 'evidence lacks (target-mode live-cyberpunk)'}
   if($et -notmatch ('\(process-id\s+'+[regex]::Escape([string]$gameProcess.Id)+'\)')){throw 'evidence PID differs from Start-Process PID'}; Log 'PASS exact PID/module/SHA live-cyberpunk evidence'
 
-  $a=Repl @('(визначити x31 42)','x31'); if($a.Count -ne 2 -or $a[0] -cne '42' -or $a[1] -cne '42'){throw 'first Ukrainian REPL witness failed'}
-  $b=Repl @('x31'); if($b.Count -ne 1 -or $b[0] -cne '42'){throw 'state did not survive reconnect'}; Log 'PASS Ukrainian визначити state survived reconnect'
+  # #24/#8 physical Session witness. PowerShell does not own expected Lisp
+  # values or closure rendering. It records canonical live replies as baselines
+  # and later checks only survival/equality plus the canonical error transport.
+  $a=Repl @(
+    '(визначити x31 42)',
+    'x31',
+    '(визначити подвоїти (функція (значення) (+ значення значення)))',
+    '(подвоїти 21)'
+  )
+  if($a.Count -ne 4 -or $a[0].StartsWith('error:') -or $a[1].StartsWith('error:') -or
+     $a[2].StartsWith('error:') -or $a[3].StartsWith('error:')){
+    throw 'initial Ukrainian value/closure Session witness did not succeed canonically'
+  }
+  $baselineValue=$a[1]
+  $baselineClosure=$a[3]
+  Log 'PASS Ukrainian closure persisted and executed'
+
+  $b=Repl @('x31','(подвоїти 21)')
+  if($b.Count -ne 2 -or $b[0].StartsWith('error:') -or $b[1].StartsWith('error:') -or
+     $b[0] -cne $baselineValue -or $b[1] -cne $baselineClosure){
+    throw 'state/closure did not survive reconnect with the same canonical live results'
+  }
+  Log 'PASS Ukrainian визначити state and closure survived reconnect'
+
+  # Observe canonical failure text without reclassifying its Lisp meaning.
+  # Recovery is proved relationally against the pre-error live Session state.
+  $typeError=Repl @('(car 5)','x31','(подвоїти 21)','(+ 20 22)')
+  if($typeError.Count -ne 4 -or -not $typeError[0].StartsWith('error:') -or
+     $typeError[1] -cne $baselineValue -or $typeError[2] -cne $baselineClosure -or
+     $typeError[3].StartsWith('error:')){
+    throw 'canonical type error did not recover with prior Session state intact'
+  }
+  $baselineValid=$typeError[3]
+  Log 'PASS canonical type error recovered in same Session with prior state intact'
+
+  $unknown=Repl @('missing-symbol-24','x31','(+ 20 22)')
+  if($unknown.Count -ne 3 -or -not $unknown[0].StartsWith('error:') -or
+     $unknown[1] -cne $baselineValue -or $unknown[2].StartsWith('error:') -or
+     $unknown[2] -cne $baselineValid){
+    throw 'unknown symbol did not fail canonically and recover'
+  }
+  Log 'PASS unknown symbol failed canonically and Session recovered'
+
+  Log 'malformed-syntax-24: sending incomplete list as one bounded REPL request'
+  $malformed=Repl @('(','x31','(+ 20 22)')
+  if($malformed.Count -ne 3 -or -not $malformed[0].StartsWith('error:') -or
+     $malformed[1] -cne $baselineValue -or $malformed[2].StartsWith('error:') -or
+     $malformed[2] -cne $baselineValid){
+    throw 'malformed syntax did not fail canonically and recover'
+  }
+  Log 'PASS malformed syntax failed canonically and Session recovered'
 
   Copy-Item -LiteralPath $trustedBridge -Destination $wrongTrust; $bytes=[IO.File]::ReadAllBytes($wrongTrust); if($bytes.Length -lt 1){throw 'negative wrong trust copy empty'}; $bytes[$bytes.Length-1]=$bytes[$bytes.Length-1] -bxor 1; [IO.File]::WriteAllBytes($wrongTrust,$bytes)
   $negativeRejected=$false
