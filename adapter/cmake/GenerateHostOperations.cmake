@@ -42,6 +42,16 @@ foreach(entry IN LISTS entries)
   if(NOT owner MATCHES "^(my-lisp|cyberpunk-host|REDengine)$")
     message(FATAL_ERROR "host operation registry has invalid owner: ${entry}")
   endif()
+  # Keep host capability metadata inside the value kinds the checked host
+  # boundary can represent without inventing a second untyped value channel.
+  # Canonical values keep their exact kind; GameHandle is the explicit
+  # Cyberpunk-owned opaque kind. Expanding this vocabulary is an ABI change.
+  if(NOT input MATCHES "^(none|truth|fixnum|symbol|string|rational|game-handle)$")
+    message(FATAL_ERROR "host operation registry has invalid input kind: ${entry}")
+  endif()
+  if(NOT result MATCHES "^(nil|truth|fixnum|symbol|string|rational|game-handle)$")
+    message(FATAL_ERROR "host operation registry has invalid result kind: ${entry}")
+  endif()
   list(FIND ids "${id}" repeated_id)
   list(FIND surfaces "${surface}" repeated_surface)
   if(NOT repeated_id EQUAL -1 OR NOT repeated_surface EQUAL -1)
