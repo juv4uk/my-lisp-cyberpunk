@@ -11,6 +11,10 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Prove final physical-live runner orchestration contract
+        shell: pwsh
+        run: ./tools/tests/FinalCyberpunkLiveWitnessContractTest.ps1
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Build canonical my-lisp runtime
