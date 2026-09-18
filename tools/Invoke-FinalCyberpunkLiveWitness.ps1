@@ -77,8 +77,49 @@ try {
   $et=Get-Content -Raw -LiteralPath $EvidenceOut; if($et -notmatch '\(target-mode live-cyberpunk\)'){throw 'evidence lacks (target-mode live-cyberpunk)'}
   if($et -notmatch ('\(process-id\s+'+[regex]::Escape([string]$gameProcess.Id)+'\)')){throw 'evidence PID differs from Start-Process PID'}; Log 'PASS exact PID/module/SHA live-cyberpunk evidence'
 
-  $a=Repl @('(визначити x31 42)','x31'); if($a.Count -ne 2 -or $a[0] -cne '42' -or $a[1] -cne '42'){throw 'first Ukrainian REPL witness failed'}
-  $b=Repl @('x31'); if($b.Count -ne 1 -or $b[0] -cne '42'){throw 'state did not survive reconnect'}; Log 'PASS Ukrainian визначити state survived reconnect'
+  # Reuse exact closure forms already proven by the pinned my-lisp-embed
+  # tests and the standalone bridge harness.  Expected values here are not a
+  # second semantic oracle: they are the same accepted upstream witness used
+  # by this exact pinned canonical Session.
+  $a=Repl @(
+    '(визначити x31 42)',
+    'x31',
+    '(визначити подвоїти (функція (значення) (+ значення значення)))',
+    '(подвоїти 21)'
+  )
+  if($a.Count -ne 4 -or $a[0] -cne '42' -or $a[1] -cne '42' -or $a[2] -cne '<lambda>' -or $a[3] -cne '42'){
+    throw 'initial Ukrainian value/closure Session witness failed'
+  }
+  Log 'PASS Ukrainian closure persisted and executed'
+
+  $b=Repl @('x31','(подвоїти 21)')
+  if($b.Count -ne 2 -or $b[0] -cne '42' -or $b[1] -cne '42'){throw 'state/closure did not survive reconnect'}
+  Log 'PASS Ukrainian визначити state and closure survived reconnect'
+
+  # #24/#8 live error boundary: an ordinary canonical error must be returned
+  # as canonical embed text, not classified by the bridge, and the same
+  # Session must still contain definitions created before the error.
+  $typeError=Repl @('(car 5)','x31','(подвоїти 21)','(+ 20 22)')
+  if($typeError.Count -ne 4 -or -not $typeError[0].StartsWith('error:') -or
+     $typeError[1] -cne '42' -or $typeError[2] -cne '42' -or $typeError[3] -cne '42'){
+    throw 'canonical type error did not recover with prior Session state intact'
+  }
+  Log 'PASS canonical type error recovered in same Session with prior state intact'
+
+  $unknown=Repl @('missing-symbol-24','x31','(+ 20 22)')
+  if($unknown.Count -ne 3 -or -not $unknown[0].StartsWith('error:') -or
+     $unknown[1] -cne '42' -or $unknown[2] -cne '42'){
+    throw 'unknown symbol did not fail canonically and recover'
+  }
+  Log 'PASS unknown symbol failed canonically and Session recovered'
+
+  Log 'malformed-syntax-24: sending incomplete list as one bounded REPL request'
+  $malformed=Repl @('(','x31','(+ 20 22)')
+  if($malformed.Count -ne 3 -or -not $malformed[0].StartsWith('error:') -or
+     $malformed[1] -cne '42' -or $malformed[2] -cne '42'){
+    throw 'malformed syntax did not fail canonically and recover'
+  }
+  Log 'PASS malformed syntax failed canonically and Session recovered'
 
   Copy-Item -LiteralPath $trustedBridge -Destination $wrongTrust; $bytes=[IO.File]::ReadAllBytes($wrongTrust); if($bytes.Length -lt 1){throw 'negative wrong trust copy empty'}; $bytes[$bytes.Length-1]=$bytes[$bytes.Length-1] -bxor 1; [IO.File]::WriteAllBytes($wrongTrust,$bytes)
   $negativeRejected=$false
