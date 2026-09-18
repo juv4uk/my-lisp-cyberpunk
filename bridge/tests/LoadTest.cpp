@@ -553,6 +553,17 @@ int main(int argc, char** argv)
     {
         return 17;
     }
-    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + compiled provenance witness OK\n");
+
+    // Leave the one-DLL runtime stage clean for the later admission,
+    // canonical-oracle and consumer-conformance gates in this same workflow.
+    std::error_code cleanupError;
+    std::filesystem::remove_all(bridgePath.parent_path() / "my-lisp", cleanupError);
+    if (cleanupError)
+    {
+        std::fprintf(stderr, "could not remove plugin fixtures: %s\n", cleanupError.message().c_str());
+        return 18;
+    }
+
+    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + plugin loading + compiled provenance witness OK\n");
     return 0;
 }
