@@ -37,6 +37,17 @@ $required = @(
     @{ Pattern = 'bridge-observation\.lisp'; Label = 'stale observation is explicitly handled' },
     @{ Pattern = 'Read-Host.+MENU'; Label = 'human startup/menu confirmation is recorded' },
     @{ Pattern = 'визначити'; Label = 'Ukrainian canonical persistence witness' },
+    @{ Pattern = '\(визначити\s+подвоїти\s+\(функція'; Label = 'Ukrainian closure definition witness' },
+    @{ Pattern = '\(подвоїти 21\)'; Label = 'closure execution witness' },
+    @{ Pattern = '\(car 5\)'; Label = 'canonical type-error witness' },
+    @{ Pattern = 'missing-symbol-24'; Label = 'unknown-symbol failure witness' },
+    @{ Pattern = 'malformed-syntax-24'; Label = 'malformed-syntax failure witness marker' },
+    @{ Pattern = '\(\+ 20 22\)'; Label = 'post-error valid recovery witness' },
+    @{ Pattern = "StartsWith\('error:'"; Label = 'canonical error text is observed rather than reclassified' },
+    @{ Pattern = 'PASS Ukrainian closure persisted and executed'; Label = 'closure success is transcripted' },
+    @{ Pattern = 'PASS canonical type error recovered in same Session with prior state intact'; Label = 'type-error recovery keeps pre-error state' },
+    @{ Pattern = 'PASS unknown symbol failed canonically and Session recovered'; Label = 'unknown-symbol recovery is transcripted' },
+    @{ Pattern = 'PASS malformed syntax failed canonically and Session recovered'; Label = 'malformed-syntax recovery is transcripted' },
     @{ Pattern = 'negative.*trust|wrong.*trust|tampered.*trust'; Label = 'fail-closed wrong-trust negative witness' },
     @{ Pattern = 'WaitForExit'; Label = 'cleanup waits for user-closed game rather than killing it' }
 )
