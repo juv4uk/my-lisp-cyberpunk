@@ -127,7 +127,7 @@ bool Sha256(const std::string& bytes, std::string& hex)
         return false;
     }
 
-    if (bytes.size() > static_cast<std::size_t>(std::numeric_limits<ULONG>::max()))
+    if (bytes.size() > static_cast<std::size_t>((std::numeric_limits<ULONG>::max)()))
     {
         BCryptDestroyHash(hash);
         BCryptCloseAlgorithmProvider(algorithm, 0);
