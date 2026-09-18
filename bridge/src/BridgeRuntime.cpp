@@ -3,6 +3,7 @@
 #include "CanonicalReplHost.hpp"
 #include "LocalReplQueue.hpp"
 #include "LocalReplServer.hpp"
+#include "LispPluginLoader.hpp"
 #include "MyLispBuildProvenance.hpp"
 
 #include <atomic>
@@ -122,6 +123,16 @@ DWORD RunCanonicalRepl(HMODULE ownerModule)
         host.Stop();
         SignalFinished();
         return 23;
+    }
+
+    // Startup plugins are evaluated on this same Session-owner thread before
+    // the socket worker is allowed to expose the Session. Filesystem/hash
+    // mechanics live in LispPluginLoader; all Lisp meaning stays upstream.
+    if (!LispPluginLoader::LoadAndRecord(host, ownerModule))
+    {
+        host.Stop();
+        SignalFinished();
+        return 24;
     }
 
     local_repl::RequestQueue queue;
