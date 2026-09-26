@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $scriptPath = Join-Path $PSScriptRoot "../tools/build-my-lisp-runtime.ps1"
 $gitmodulesPath = Join-Path $PSScriptRoot "../.gitmodules"
-$expectedUrl = "https://github.com/juv4uk/my-lisp.git"
+$expectedUrl = "https://github.com/juv4uk/sens.git"
 $runtimeRel = "runtime/my-lisp"
 $hostRuntimeRel = "host-runtime/external/my-lisp"
 
