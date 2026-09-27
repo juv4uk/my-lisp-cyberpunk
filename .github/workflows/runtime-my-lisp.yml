@@ -5,7 +5,7 @@ on:
     paths:
       - ".gitmodules"
       - "runtime/my-lisp"
-      - "host-runtime/external/my-lisp"
+      - "host-runtime/external/sens"
       - "tools/build-my-lisp-runtime.ps1"
       - "tests/runtime-my-lisp-contract.ps1"
       - ".github/workflows/runtime-my-lisp.yml"
