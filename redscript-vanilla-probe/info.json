@@ -1,0 +1,5 @@
+{
+    "name": "observation-probe-test",
+    "description": "CP-VANILLA-ENTRYPOINT-SURVEY (#20) falsification experiment: does bare Redscript, compiled only through REDmod, produce any observable output with zero RED4ext/CET/other mods present.",
+    "version": "0.0.1"
+}

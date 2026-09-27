@@ -1,0 +1,7 @@
+#pragma once
+
+// Build facts only. The SHA is injected from the exact pinned runtime/my-lisp
+// gitlink by CMake. ABI authority remains the upstream my_lisp_embed.h plus
+// the actually linked my_lisp_embed_abi_version() result.
+#define CYBERPUNK_MY_LISP_SHA "@MY_LISP_SHA@"
+#define CYBERPUNK_MY_LISP_LINKAGE "static"

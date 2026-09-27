@@ -25,4 +25,26 @@ execute_process(
 if(rc EQUAL 0)
   message(FATAL_ERROR "registry accepted an unknown effect")
 endif()
+file(WRITE "${work}/invalid-input-kind.lisp" "(host-operations/2\n  (cp:0001 (semantic-id none) (surface uk log) (arity 1) (effect read) (input raw-pointer) (result string) (owner cyberpunk-host) (ffi LogPrimitive) (status built) (evidence kind-mutation))\n)\n")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -DINPUT=${work}/invalid-input-kind.lisp -DOUTPUT=${work}/invalid-input-kind.hpp -P "${GENERATOR}"
+  RESULT_VARIABLE rc
+  OUTPUT_VARIABLE stdout
+  ERROR_VARIABLE stderr
+)
+if(rc EQUAL 0)
+  message(FATAL_ERROR "registry accepted raw-pointer as a host operation input kind")
+endif()
+
+file(WRITE "${work}/invalid-result-kind.lisp" "(host-operations/2\n  (cp:0001 (semantic-id none) (surface uk log) (arity 0) (effect inspect) (input none) (result float) (owner cyberpunk-host) (ffi LogPrimitive) (status built) (evidence kind-mutation))\n)\n")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -DINPUT=${work}/invalid-result-kind.lisp -DOUTPUT=${work}/invalid-result-kind.hpp -P "${GENERATOR}"
+  RESULT_VARIABLE rc
+  OUTPUT_VARIABLE stdout
+  ERROR_VARIABLE stderr
+)
+if(rc EQUAL 0)
+  message(FATAL_ERROR "registry accepted float as a host operation result kind")
+endif()
+
 message(STATUS "host operation registry rejects missing mandatory metadata")

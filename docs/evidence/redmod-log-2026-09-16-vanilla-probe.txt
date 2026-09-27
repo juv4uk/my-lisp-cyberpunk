@@ -1,0 +1,132 @@
+Copyright (c) 2022-23 CD Projekt Red. All Rights Reserved.
+Created in collaboration with CD Projekt Vancouver and Yigsoft LLC
+
+No root specified, using default root path.
+Core: App instance InitializeCore in 0.00 ms
+Continuing without global backend resource depot.
+Core: App instance InitializeResources in 0.00 ms
+Invalid root path found: D:\! This might cause errors while running commands.
+
+No module supplied, please verify the parameters!
+
+
+USAGE
+
+	redMod.exe module [opional params]
+
+Avaliable modules:
+
+	resource-export	- Export resources from engine
+
+	resource-import	- Import resources to the engine
+
+	animation-import	- imports a raw animation resource to an animset file.
+
+	util-hash	- Hashes paths/string with given hash algorithm
+
+	deploy	- Deploys mods to the game by compiling them together.
+
+	publish-cp	- Publish mods to cross-platform.
+
+	help	- Displays help info about the other avaliable modules (use -h or -help on any command)
+
+PARAMETERS
+
+	- root	- Specify the root of the game's directory (most modules require this)
+
+Copyright (c) 2022-23 CD Projekt Red. All Rights Reserved.
+Created in collaboration with CD Projekt Vancouver and Yigsoft LLC
+
+No root specified, using default root path.
+Core: App instance InitializeCore in 0.00 ms
+Continuing without global backend resource depot.
+Core: App instance InitializeResources in 0.00 ms
+Invalid root path found: D:\! This might cause errors while running commands.
+
+
+[DEPLOY] Stage 1/5 - Initialization
+No mods found, no deployment is needed!
+
+
+Commandlet deploy has succeeded.
+Copyright (c) 2022-23 CD Projekt Red. All Rights Reserved.
+Created in collaboration with CD Projekt Vancouver and Yigsoft LLC
+
+No root specified, using default root path.
+Core: App instance InitializeCore in 0.00 ms
+Continuing without global backend resource depot.
+Core: App instance InitializeResources in 0.00 ms
+Invalid root path found: D:\! This might cause errors while running commands.
+
+
+MODULE
+
+	deploy - Deploys mods to the game by compiling them together.
+
+USAGE
+
+	Deploy mods to the game
+
+		deploy -mod=<mod folder name 1> -mod=<mod folder name 2> ...
+
+OPTIONS
+
+	-mod=<mod folder name>			- Specify the folder name of a mod to be deployed. The order of these parameters will decide the load order
+
+	-modlist=<path>				- Specify the path of a file with mod folder names. The order of these parameters will decide the load order
+
+	-f|-force						- Force the deployment of mods
+
+	-rttiSchemaPath=<schema path>	- Specify the RTTI metadata for the script compiler (default is ../metadata.json)
+
+	-reportProgress				- Report a more detailed progress
+
+
+Commandlet deploy has succeeded.
+Copyright (c) 2022-23 CD Projekt Red. All Rights Reserved.
+Created in collaboration with CD Projekt Vancouver and Yigsoft LLC
+
+No root specified, using default root path.
+Core: App instance InitializeCore in 0.00 ms
+Continuing without global backend resource depot.
+Core: App instance InitializeResources in 0.00 ms
+Invalid root path found: D:\! This might cause errors while running commands.
+
+
+[DEPLOY] Stage 1/10 - Initialization
+No mods found, no deployment is needed!
+
+
+Commandlet deploy has succeeded.
+Copyright (c) 2022-23 CD Projekt Red. All Rights Reserved.
+Created in collaboration with CD Projekt Vancouver and Yigsoft LLC
+
+Core: App instance InitializeCore in 0.00 ms
+Continuing without global backend resource depot.
+Core: App instance InitializeResources in 0.00 ms
+
+
+[DEPLOY] Stage 1/10 - Initialization
+Folder observation-probe-test is not a valid mod: Missing info.json! Skipping...
+No mods found, no deployment is needed!
+
+
+Commandlet deploy has succeeded.
+Copyright (c) 2022-23 CD Projekt Red. All Rights Reserved.
+Created in collaboration with CD Projekt Vancouver and Yigsoft LLC
+
+Core: App instance InitializeCore in 0.00 ms
+Continuing without global backend resource depot.
+Core: App instance InitializeResources in 0.00 ms
+
+
+[DEPLOY] Stage 1/10 - Initialization
+Found mod "observation-probe-test" (v0.0.1) in folder "observation-probe-test" (enabled; not deployed; SCRIPTS; )
+Needs deployment: true
+[DEPLOY] Stage 2/10 - Script Compilation
+[DEPLOY] Stage 3/10 - TweakDB Compilation
+[DEPLOY] Stage 9/10 - Audio
+[DEPLOY] Stage 10/10 - Finalize
+File 'D:\games\Cyberpunk 2077 v.2.31 (2020)\Cyberpunk 2077\r6\cache\modded\mods.json' (199 bytes) written.
+
+Commandlet deploy has succeeded.

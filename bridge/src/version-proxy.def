@@ -1,0 +1,24 @@
+; version.dll proxy export table (#31 CP-PROBE-INPROCESS-V0).
+;
+; Real version.dll names below are implemented as exact winver.h forwards.
+; MyLispBridgeShutdown is our own lifecycle-only export used for controlled
+; unload; it exposes no Lisp semantics or game policy.
+LIBRARY version
+EXPORTS
+    MyLispBridgeShutdown
+    GetFileVersionInfoA
+    GetFileVersionInfoExA
+    GetFileVersionInfoExW
+    GetFileVersionInfoSizeA
+    GetFileVersionInfoSizeExA
+    GetFileVersionInfoSizeExW
+    GetFileVersionInfoSizeW
+    GetFileVersionInfoW
+    VerFindFileA
+    VerFindFileW
+    VerInstallFileA
+    VerInstallFileW
+    VerLanguageNameA
+    VerLanguageNameW
+    VerQueryValueA
+    VerQueryValueW

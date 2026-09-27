@@ -4,3 +4,6 @@
 [submodule "host-runtime/external/sens"]
 	path = host-runtime/external/sens
 	url = https://github.com/juv4uk/sens.git
+[submodule "runtime/my-lisp"]
+	path = runtime/my-lisp
+	url = https://github.com/juv4uk/my-lisp.git

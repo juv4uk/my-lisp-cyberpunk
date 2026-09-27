@@ -21,6 +21,37 @@ public class NeuralDeckOverlay extends CustomPopup {
         this.m_closeAction = n"neuraldeck_no_close_action";
     }
 
+    // Fine-grained stage logging over Codeware's own CustomPopup.reds
+    // lifecycle (OnAttach -> OnShow -> OnShowFinish -> ... -> OnHide ->
+    // OnHideFinish -> OnHidden). The 2026-09-16 evidence shows the popup
+    // never reaches OnHidden even seconds after Close(), which is far
+    // longer than the 0.25s fade animation Codeware plays -- these
+    // overrides pinpoint which stage the chain actually reaches instead of
+    // guessing further.
+    protected cb func OnAttach() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnAttach");
+        super.OnAttach();
+    }
+
+    protected cb func OnShow() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnShow");
+        super.OnShow();
+    }
+
+    protected cb func OnShown() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnShown (show animation finished)");
+    }
+
+    protected cb func OnDetach() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnDetach");
+        super.OnDetach();
+    }
+
+    protected cb func OnHide() {
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck lifecycle: OnHide");
+        super.OnHide();
+    }
+
     protected cb func OnCreate() {
         let root = new inkCanvas();
         root.SetName(n"NeuralDeckRoot");
@@ -58,7 +89,7 @@ public class NeuralDeckOverlay extends CustomPopup {
         divider.Reparent(panel);
 
         let status = new inkText();
-        status.SetText("CANONICAL SESSION // BRIDGE READY\nF10 — CLOSE   •   GAME CONTINUES RUNNING");
+        status.SetText("CANONICAL SESSION // BRIDGE READY\nEND — CLOSE   •   GAME CONTINUES RUNNING");
         status.SetFontFamily("base\\gameplay\\gui\\fonts\\raj\\raj.inkfontfamily");
         status.SetFontStyle(n"Regular");
         status.SetFontSize(20);
@@ -80,19 +111,20 @@ public class NeuralDeckOverlay extends CustomPopup {
 }
 
 // Codeware discovers every concrete ScriptableService during script startup.
-// The service registers its hotkey only when the game instance is initialized.
+// The service registers its hotkey when Codeware creates the service.
 public class NeuralDeckService extends ScriptableService {
     private let m_overlay: ref<NeuralDeckOverlay>;
     private let m_hotkey: ref<CallbackSystemHandler>;
+    private let m_closing: Bool;
 
     // Codeware owns engine input delivery.  Registering here avoids polling
-    // Windows input from the RED4ext adapter and keeps presentation within the
-    // Redscript/UI layer.
+    // Windows input from the RED4ext adapter and keeps presentation in the
+    // Redscript/UI layer.  Filter in the receiver: this avoids a broken
+    // function-key target filter while retaining one precise hotkey.
     private cb func OnLoad() {
         this.m_hotkey = GameInstance.GetCallbackSystem()
-            .RegisterCallback(n"Input/Key", this, n"OnNeuralDeckKey", true)
-            .AddTarget(InputTarget.Key(EInputKey.IK_F10, EInputAction.IACT_Press));
-        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck registered Codeware F10 callback");
+            .RegisterCallback(n"Input/Key", this, n"OnNeuralDeckKey", true);
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck registered Codeware End callback");
     }
 
     private cb func OnUninitialize() {
@@ -104,13 +136,35 @@ public class NeuralDeckService extends ScriptableService {
     }
 
     private cb func OnNeuralDeckKey(event: ref<KeyInputEvent>) {
-        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck received Codeware F10 press");
+        if !Equals(event.GetAction(), EInputAction.IACT_Press) {
+            return;
+        }
+        if !Equals(event.GetKey(), EInputKey.IK_End) {
+            return;
+        }
+        LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck received Codeware End press");
         this.ToggleOverlay();
     }
 
     public func ToggleOverlay() {
         if IsDefined(this.m_overlay) {
+            // Close() (Codeware CustomPopup.reds) only queues a
+            // HideCustomPopupEvent; the popup does not actually detach and
+            // reach OnHidden() until a fade-out animation finishes a frame
+            // or more later. A second Close() call before that animation
+            // completes restarts OnDetach()/the fade, so OnHideFinish (and
+            // therefore our own OnHidden -> OnOverlayHidden reset) can be
+            // pushed out indefinitely by repeated key presses -- observed
+            // live as m_overlay staying permanently non-null after the
+            // first rapid double-press, so every later press just closes a
+            // phantom that never reopens. Ignore re-entrant close requests
+            // instead of re-issuing Close() on an already-closing popup.
+            if this.m_closing {
+                LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay ignored: already closing");
+                return;
+            }
             LogChannel(n"DEBUG", "my-lisp-cyberpunk: NeuralDeck ToggleOverlay closing existing overlay");
+            this.m_closing = true;
             this.m_overlay.Close();
             return;
         }
@@ -133,6 +187,7 @@ public class NeuralDeckService extends ScriptableService {
     public func OnOverlayHidden(overlay: ref<NeuralDeckOverlay>) {
         if Equals(this.m_overlay, overlay) {
             this.m_overlay = null;
+            this.m_closing = false;
         }
     }
 

@@ -44,6 +44,7 @@ include(CTest)
 if(BUILD_TESTING)
   add_test(NAME host-operations-registry-mutation COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsRegistryTest.cmake)
   add_test(NAME host-operations-metadata-registry-mutation COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsMetadataRegistryTest.cmake)
+  add_test(NAME host-operations-metadata-drift COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsMetadataDriftTest.cmake)
   add_test(NAME host-operations-projection COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsProjectionTest.cmake)
   add_test(NAME host-bindings-registry-mutation COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostBindings.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostBindingsRegistryTest.cmake)
   add_test(NAME canon-spelling-guard COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../host-runtime/src/eval.rs -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCanonSpellings.cmake)
@@ -55,6 +56,41 @@ if(BUILD_TESTING)
       -DADAPTER_INPUT=${CMAKE_CURRENT_SOURCE_DIR}/src/Main.cpp
       -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/NeuralDeckRedscriptContractTest.cmake
   )
+  # CP-OBSERVATION-CONTRACT-V0 (issue #28): requires the canonical my-lisp
+  # runtime built by tools/build-my-lisp-runtime.ps1 (runtime/my-lisp
+  # submodule) to exist first. CI builds it before invoking ctest; see
+  # .github/workflows/windows.yml.
+  add_test(
+    NAME observation-contract-fixtures
+    COMMAND ${CMAKE_COMMAND}
+      -DMY_LISP_EXE=${CMAKE_CURRENT_SOURCE_DIR}/../runtime/my-lisp/target/release/my-lisp.exe
+      -DFIXTURES_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/observation
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ObservationContractFixturesTest.cmake
+  )
+  # CP-OBSERVATION-CROSSCHECK-V0 (issue #32): the MEMORY-vs-SCREEN
+  # cross-check policy itself, tested against all 5 scenarios #32's own
+  # acceptance criteria require, without needing a live game.
+  add_test(
+    NAME observation-crosscheck-fixtures
+    COMMAND ${CMAKE_COMMAND}
+      -DMY_LISP_EXE=${CMAKE_CURRENT_SOURCE_DIR}/../runtime/my-lisp/target/release/my-lisp.exe
+      -DPOLICY_FILE=${CMAKE_CURRENT_SOURCE_DIR}/../tools/observation/crosscheck.lisp
+      -DFIXTURE=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/crosscheck/five-scenarios.lisp
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/ObservationCrosscheckFixturesTest.cmake
+  )
+  if(WIN32)
+    # #29/#30 probe scripts and the #19 boundary guard are PowerShell,
+    # not C++; wire them into the same ctest surface so `ctest` remains
+    # the single source of truth for this repo's test status.
+    add_test(
+      NAME observation-probes-live
+      COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tests/ObservationProbesLiveTest.ps1
+    )
+    add_test(
+      NAME vanilla-boundary-guard-mutation
+      COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/../tools/tests/VanillaBoundaryGuardTest.ps1
+    )
+  endif()
 endif()
 
 add_subdirectory(src)
