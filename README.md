@@ -18,7 +18,7 @@ Lisp-сесію та виконує один read-only вертикальний 
 Self-hosting SysV nucleus **не** переїжджав — він і далі в `wsm-my-lisp`.
 
 ```bash
-cd host-runtime && git submodule update --init external/my-lisp
+cd host-runtime && git submodule update --init external/sens
 cargo test --target x86_64-pc-windows-msvc
 ```
 
@@ -29,10 +29,10 @@ cargo test --target x86_64-pc-windows-msvc
 
 - v0 = **fixed host-dispatch**, без closures/callback-реєстрації.
 - Цей репозиторій володіє Cyberpunk-specific RED4ext кодом **і** host-runtime DLL.
-- Семантика мови — лише **[my-lisp](https://github.com/juv4uk/my-lisp)**.
+- Семантика мови — лише **[my-lisp](https://github.com/juv4uk/sens)**.
 - Self-hosting Lisp→asm — **[wsm-my-lisp](https://github.com/juv4uk/wsm-my-lisp)** (не Rust eval).
 - Компіляція офлайн — **[cml](https://github.com/juv4uk/cml)**.
 
 ## Задачі
 
-Див. `tasks.my`.
+Див. `tasks.lisp`.

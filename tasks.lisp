@@ -1,4 +1,4 @@
-; tasks.my — my-lisp-cyberpunk
+; tasks.lisp — my-lisp-cyberpunk
 ; Product-surface repo for my-lisp inside Cyberpunk 2077 (CET/RED4ext analogy).
 ; Created 2026-09-10 empty; recommendations set 2026-09-10 from cross-repo review.
 ; Updated 2026-09-11: deep-penetration task ladder after v0 fixed-dispatch.
@@ -53,7 +53,7 @@
      (depends-on . ("CP-OWNER-SCOPE-V0"))
      (capabilities . (fixed-dispatch host-mechanism lisp-policy))
      (description . "Перенести Running tick policy з C++ у scripts/диспетчер.мій: C++ доставляє tick та виконує зареєстровані capabilities, а `.my` запитує факти, обирає дію й послідовність.")
-     (acceptance . "Два `.my` сценарії над незмінним adapter виражають різну поведінку для однакового факту; C++ не інтерпретує t/() і не тримає сценарний latch.")))
+     (acceptance . "Два `.lisp` сценарії над незмінним adapter виражають різну поведінку для однакового факту; C++ не інтерпретує t/() і не тримає сценарний latch.")))
    ("CP-DISPATCH-BENCHMARKS-V0" .
     ((priority . 8.0)
      (done . t)
@@ -61,7 +61,7 @@
      (depends-on . ("CP-LISP-OWNS-ORCHESTRATION-V0"))
      (evidence . ("adapter/tests/DispatchBenchmark.cpp" "docs/benchmarks.md"))
      (capabilities . (benchmark fixed-dispatch evidence))
-     (description . "Створити Release x64 adapter harness, який вимірює fixed `.my` dispatch окремо від WSM microbench і реального RED4ext frame.")
+     (description . "Створити Release x64 adapter harness, який вимірює fixed `.lisp` dispatch окремо від WSM microbench і реального RED4ext frame.")
      (acceptance . "30 серій по 10 000 викликів після warm-up; BENCH_RESULT з median/p95; correctness witness і timing не змішані; live-game вимір іде окремо.")))
    ("CP-CML-AOT-DISPATCH" .
     ((priority . 8.7)
@@ -161,7 +161,7 @@
      (done . nil)
      (origin . owner-required)
      (description . "Власник явно вирішує політику першої mutating capability (телепорт / inventory / save). Read-only спочатку, write тільки після окремого рішення.")
-     (acceptance . "Запис у README або tasks.my: що дозволено в v1, що заборонено.")))
+     (acceptance . "Запис у README або tasks.lisp: що дозволено в v1, що заборонено.")))
 
    ("CP-LISP-HARDWARE-OPTIMIZER" .
     ((priority . 3.0)
