@@ -10,8 +10,8 @@ source for the host-runtime crate — no longer synced from `wsm-my-lisp`.
 | `Cargo.toml` / `Cargo.lock` | committed here |
 | `README.md` / `MIGRATION.md` | committed here |
 | `asm/nucleus-win64.s` | committed here |
-| `build.rs` | committed here (registry path: `external/my-lisp/lib/surface/semantic-registry.wsm`) |
-| `external/my-lisp` | git submodule, pinned `ccacc68ef6729a0973bdd1fc41906fc160127f89` (same commit `wsm-my-lisp/dll` had pinned at migration time, `4381e93`) |
+| `build.rs` | committed here (registry path: `external/sens/lib/surface/semantic-registry.wsm`) |
+| `external/sens` | git submodule, pinned `d3e5b93d06cdc2889c214509f825b099c8a2c89e` (aligned with ecosystem sens pin) |
 
 **Verified:** `cargo test --target x86_64-pc-windows-msvc` — 55/55 green
 (2026-09-11, this tree, after submodule init).

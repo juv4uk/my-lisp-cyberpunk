@@ -21,7 +21,7 @@ This directory is the allowed Cyberpunk embedding surface.
 
 ```bash
 cd host-runtime
-git submodule update --init external/my-lisp   # for build.rs canon spellings
+git submodule update --init external/sens   # for build.rs canon spellings
 cargo test --target x86_64-pc-windows-msvc
 ```
 
@@ -32,7 +32,7 @@ Cdylib export name remains `wsm_my_lisp_cyberpunk_dll` so existing
 
 - `src/` — session, reader, eval, FFI
 - `asm/nucleus-win64.s` — Win64 5 primitives (vendored; SysV authority stays in wsm-my-lisp)
-- `external/my-lisp` — submodule for `semantic-registry.wsm` at build time
+- `external/sens` — submodule for `semantic-registry.wsm` at build time
 
 See [MIGRATION.md](MIGRATION.md).
 

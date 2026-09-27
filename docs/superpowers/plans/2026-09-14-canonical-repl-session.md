@@ -45,7 +45,7 @@ int32_t my_lisp_embed_register_unary_handle_to_utf8(
 ### Task 2: Adopt ABI v4 in Cyberpunk host-runtime and adapter
 
 **Files:**
-- Modify: `C:/GitHub/my-lisp-cyberpunk/host-runtime/external/my-lisp`
+- Modify: `C:/GitHub/my-lisp-cyberpunk/host-runtime/external/sens`
 - Modify: `C:/GitHub/my-lisp-cyberpunk/adapter/src/Main.cpp`
 - Modify: `C:/GitHub/my-lisp-cyberpunk/adapter/tests/*`
 
