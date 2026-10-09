@@ -46,6 +46,16 @@ if(BUILD_TESTING)
   add_test(NAME host-operations-metadata-registry-mutation COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsMetadataRegistryTest.cmake)
   add_test(NAME host-operations-metadata-drift COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsMetadataDriftTest.cmake)
   add_test(NAME host-operations-projection COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostOperations.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsProjectionTest.cmake)
+  add_test(
+    NAME host-operations-authority-contract
+    COMMAND ${CMAKE_COMMAND}
+      -DAUTHORITY=${HOST_OPERATIONS_REGISTRY}
+      -DADAPTER_CMAKE=${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt
+      -DMAIN_CPP=${CMAKE_CURRENT_SOURCE_DIR}/src/Main.cpp
+      -DFUNCTION_TABLE=${CMAKE_CURRENT_SOURCE_DIR}/../docs/function-identity-table.md
+      -DDECISION=${CMAKE_CURRENT_SOURCE_DIR}/../docs/host-operations-authority.md
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostOperationsAuthorityContractTest.cmake
+  )
   add_test(NAME host-bindings-registry-mutation COMMAND ${CMAKE_COMMAND} -DGENERATOR=${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateHostBindings.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/HostBindingsRegistryTest.cmake)
   add_test(NAME canon-spelling-guard COMMAND ${CMAKE_COMMAND} -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/../host-runtime/src/eval.rs -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCanonSpellings.cmake)
   add_test(NAME canon-spelling-guard-mutation COMMAND ${CMAKE_COMMAND} -DGUARD=${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckCanonSpellings.cmake -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/CanonSpellingGuardTest.cmake)
