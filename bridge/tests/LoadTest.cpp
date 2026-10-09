@@ -243,6 +243,125 @@ std::string ReadText(const std::filesystem::path& path)
     return text.str();
 }
 
+bool WriteText(const std::filesystem::path& path, const std::string& text)
+{
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    if (!output)
+    {
+        return false;
+    }
+    output.write(text.data(), static_cast<std::streamsize>(text.size()));
+    return output.good();
+}
+
+bool PreparePluginFixtures(const std::filesystem::path& bridgePath)
+{
+    const auto root = bridgePath.parent_path() / "my-lisp";
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    error.clear();
+    std::filesystem::create_directories(root / "plugins", error);
+    if (error)
+    {
+        std::fprintf(stderr, "could not create plugin fixture directory: %s\n", error.message().c_str());
+        return false;
+    }
+
+    struct Fixture
+    {
+        const char* relativePath;
+        const char* source;
+    };
+    const Fixture fixtures[] = {
+        {"init.lisp", u8"(\u0432\u0438\u0437\u043d\u0430\u0447\u0438\u0442\u0438 plugin-base 10)\n"},
+        {"plugins/a-first.lisp", u8"(\u0432\u0438\u0437\u043d\u0430\u0447\u0438\u0442\u0438 plugin-first (+ plugin-base 1))\n"},
+        {"plugins/b-broken.lisp", "(this-plugin-is-broken 1)\n"},
+        {"plugins/c-after.lisp", u8"(\u0432\u0438\u0437\u043d\u0430\u0447\u0438\u0442\u0438 plugin-after (+ plugin-first 31))\n"},
+        {"plugins/notes.md", "not a Lisp plugin\n"},
+    };
+
+    for (const auto& fixture : fixtures)
+    {
+        const auto path = root / fixture.relativePath;
+        if (!WriteText(path, fixture.source))
+        {
+            std::fprintf(stderr, "could not write plugin fixture: %s\n", path.string().c_str());
+            return false;
+        }
+    }
+    return true;
+}
+
+bool RequireDefinedWithoutOwningValue(SOCKET client, const char* symbol)
+{
+    std::string reply;
+    if (!Exchange(client, symbol, reply))
+    {
+        std::fprintf(stderr, "plugin symbol request failed: %s\n", symbol);
+        return false;
+    }
+    if (reply.rfind("error:", 0) == 0)
+    {
+        std::fprintf(stderr, "plugin symbol was not available in canonical Session: %s -> %s\n",
+                     symbol, reply.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool ProvePluginLoadReport(const std::filesystem::path& bridgePath)
+{
+    const auto observationPath = bridgePath.parent_path() / "bridge-observation.lisp";
+    const std::string observation = ReadText(observationPath);
+    if (observation.find("(plugin-load-report/1") == std::string::npos)
+    {
+        std::fprintf(stderr, "plugin load report missing from runtime observation\n");
+        return false;
+    }
+
+    struct Expected
+    {
+        const char* path;
+        const char* sha256;
+        const char* status;
+    };
+    const Expected expected[] = {
+        {"init.lisp", "95dbdb59aad65dfabda6c52e8c1a78dca88ccee38bbcbe2893ab46ead20313d7", "loaded"},
+        {"plugins/a-first.lisp", "4be2385e389773d68bda1f55f0d0acc20db1933f297237a13c6f3ed3d615da50", "loaded"},
+        {"plugins/b-broken.lisp", "da9356697bf1721ecf1378bc0c40a2929b01bb6fdb827bd6bb06afa86f398dce", "error"},
+        {"plugins/c-after.lisp", "6095af27bb858247b056d561768d7b4054551b9d3e3bb0e29ec689a7cc27e657", "loaded"},
+    };
+
+    std::size_t previous = 0;
+    bool first = true;
+    for (const auto& item : expected)
+    {
+        const std::string needle =
+            "((path \"" + std::string(item.path) + "\") (sha256 \"" + item.sha256 +
+            "\") (status " + item.status + "))";
+        const auto position = observation.find(needle);
+        if (position == std::string::npos)
+        {
+            std::fprintf(stderr, "plugin report entry missing: %s\n", needle.c_str());
+            return false;
+        }
+        if (!first && position <= previous)
+        {
+            std::fprintf(stderr, "plugin report order is not deterministic around: %s\n", item.path);
+            return false;
+        }
+        previous = position;
+        first = false;
+    }
+
+    if (observation.find("plugins/notes.md") != std::string::npos)
+    {
+        std::fprintf(stderr, "non-.lisp file was admitted into plugin report\n");
+        return false;
+    }
+    return true;
+}
+
 bool ProveRuntimeProvenance(const std::filesystem::path& bridgePath,
                             const std::string& expectedSha,
                             const std::string& expectedAbi)
@@ -296,6 +415,12 @@ int main(int argc, char** argv)
         return 2;
     }
     std::printf("early shutdown witness OK\n");
+
+    const std::filesystem::path bridgePath = std::filesystem::absolute(argv[1]);
+    if (!PreparePluginFixtures(bridgePath))
+    {
+        return 15;
+    }
 
     WSADATA winsock{};
     if (WSAStartup(MAKEWORD(2, 2), &winsock) != 0)
@@ -354,6 +479,17 @@ int main(int argc, char** argv)
         return 7;
     }
 
+    // Plugin loading is a mechanism witness, not a second semantic oracle:
+    // only prove that definitions from init + later plugins exist in the same
+    // canonical Session. Their Lisp values remain owned by canonical my-lisp.
+    if (!RequireDefinedWithoutOwningValue(client, "plugin-base") ||
+        !RequireDefinedWithoutOwningValue(client, "plugin-first") ||
+        !RequireDefinedWithoutOwningValue(client, "plugin-after"))
+    {
+        StopAndUnload(client);
+        return 16;
+    }
+
     // Replay the exact Ukrainian forms already proved by the pinned
     // my-lisp-embed tests. u8 + universal character names makes this input
     // deterministic UTF-8 regardless of the Windows runner's local code page.
@@ -409,10 +545,25 @@ int main(int argc, char** argv)
     {
         return 13;
     }
-    if (!ProveRuntimeProvenance(std::filesystem::path(argv[1]), argv[2], argv[3]))
+    if (!ProveRuntimeProvenance(bridgePath, argv[2], argv[3]))
     {
         return 14;
     }
-    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + compiled provenance witness OK\n");
+    if (!ProvePluginLoadReport(bridgePath))
+    {
+        return 17;
+    }
+
+    // Leave the one-DLL runtime stage clean for the later admission,
+    // canonical-oracle and consumer-conformance gates in this same workflow.
+    std::error_code cleanupError;
+    std::filesystem::remove_all(bridgePath.parent_path() / "my-lisp", cleanupError);
+    if (cleanupError)
+    {
+        std::fprintf(stderr, "could not remove plugin fixtures: %s\n", cleanupError.message().c_str());
+        return 18;
+    }
+
+    std::printf("canonical Ukrainian REPL persisted across reconnects + error + shutdown + plugin loading + compiled provenance witness OK\n");
     return 0;
 }
