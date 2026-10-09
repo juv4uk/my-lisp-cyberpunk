@@ -59,6 +59,19 @@ Paths are relative to the plugin root and rendered with `/`. Read failures remai
 
 The existing canonical `my-lisp --oracle-check` gate must continue accepting the complete observation file.
 
+## Startup snapshot and removal semantics
+
+The v0 loader takes **one startup snapshot** of adjacent plugin files and evaluates
+that snapshot into the bridge's single process-owned canonical Session. If a file
+is removed, renamed or changed on disk after startup, that change becomes visible
+only in a **new game process and new Session**. This contract provides no
+per-plugin unload, rollback, watcher or live reload; explicit reload remains #38.
+
+A plugin evaluation that returns an error is **not transactional**. Definitions
+and side effects already completed in that same canonical Session may remain.
+The load report records evaluation outcome (`loaded` or `error`), not a claim
+that failed plugin work was rolled back.
+
 ## Failure policy
 
 - Missing plugin root: empty report, normal REPL startup.
