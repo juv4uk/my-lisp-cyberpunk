@@ -19,6 +19,10 @@
 - Broken plugin cannot destroy Session or prevent later plugins.
 - Paths, hashes and statuses are runtime evidence, not semantic authority.
 - Reload is out of scope and owned by #38.
+- v0 loads a startup snapshot into one process-owned Session: file removal/rename
+  takes effect only in a fresh game process/Session.
+- No per-plugin unload or rollback; failed plugin evaluation can leave prior
+  canonical definitions/side effects and the report describes outcome only.
 
 ---
 
